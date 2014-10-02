@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
 
 	"github.com/haskelladdict/mbdr/libmbd"
 )
@@ -11,14 +12,24 @@ import (
 const mbdrVersion = 2
 
 // command line flags
-var infoFlag bool
-var listFlag bool
-var extractIDFlag int
+var (
+	infoFlag      bool
+	listFlag      bool
+	addTimesFlag  bool
+	writeFileFlag bool
+	extractFlag   bool
+	extractID     int
+	extractString string
+)
 
 func init() {
 	flag.BoolVar(&infoFlag, "i", false, "show general info")
 	flag.BoolVar(&listFlag, "l", false, "list available data blocks")
-	flag.IntVar(&extractIDFlag, "I", -1, "extract dataset at given index")
+	flag.BoolVar(&extractFlag, "e", false, "extract dataset")
+	flag.BoolVar(&addTimesFlag, "t", false, "add output times column")
+	flag.BoolVar(&writeFileFlag, "w", false, "write output to file")
+	flag.IntVar(&extractID, "I", 0, "id of dataset to extract")
+	flag.StringVar(&extractString, "N", "", "name of dataset to extract")
 }
 
 // main function entry point
@@ -42,8 +53,8 @@ func main() {
 	case listFlag:
 		showAvailableData(data)
 
-	case extractIDFlag >= 0:
-		showDataByID(data, extractIDFlag)
+	case extractFlag:
+		writeData(data)
 	}
 }
 
@@ -84,21 +95,49 @@ func showAvailableData(d *libmbd.MCellData) {
 	}
 }
 
-// showDataByID prints the content of the data set at the requested ID
-// NOTE: This routine doesn't bother with converting integer column data and
-// simply prints it as double
-func showDataByID(d *libmbd.MCellData, id int) {
-	data, err := d.BlockDataByID(uint64(id))
-	if err != nil {
-		log.Fatal(err)
+// writeData extracts the content of a data set either at the requested ID
+// or the provided name and writes it to stdout or a file if requested
+// NOTE: This routine doesn't bother with converting to integer column data
+// (as determined by DataTypes) and simply prints everything as double
+func writeData(d *libmbd.MCellData) {
+	var data *libmbd.CountData
+	name := extractString
+	var err error
+	if extractString != "" {
+		if data, err = d.BlockDataByName(extractString); err != nil {
+			log.Fatal(err)
+		}
+	} else {
+		if data, err = d.BlockDataByID(uint64(extractID)); err != nil {
+			log.Fatal(err)
+		}
+		if name, err = d.IDtoBlockName(uint64(extractID)); err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	var outputTimes []float64
+	if addTimesFlag {
+		outputTimes = d.OutputTimes()
+	}
+
+	output := os.Stdout
+	if writeFileFlag {
+		if output, err = os.Create(name); err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	numCols := len(data.Col)
 	numRows := len(data.Col[0])
 	for r := 0; r < numRows; r++ {
 		for c := 0; c < numCols; c++ {
-			fmt.Printf("%g", data.Col[c][r])
+			if addTimesFlag {
+				fmt.Fprintf(output, "%8.5e %g", outputTimes[r], data.Col[c][r])
+			} else {
+				fmt.Fprintf(output, "%g", data.Col[c][r])
+			}
 		}
-		fmt.Printf("\n")
+		fmt.Fprintf(output, "\n")
 	}
 }

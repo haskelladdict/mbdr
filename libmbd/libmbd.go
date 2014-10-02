@@ -69,6 +69,14 @@ func (d *MCellData) BlockNames() []string {
 	return d.blockNames
 }
 
+// IDtoBlockName returns the blockname corresponding to the given id
+func (d *MCellData) IDtoBlockName(id uint64) (string, error) {
+	if id < 0 || id >= uint64(len(d.blockNames)) {
+		return "", fmt.Errorf("requested id is out of range")
+	}
+	return d.blockNames[id], nil
+}
+
 // NumDataBlocks returns the number of available datablocks
 func (d *MCellData) NumDataBlocks() uint64 {
 	return d.numBlocks
@@ -88,6 +96,19 @@ func (d *MCellData) OutputType() uint16 {
 // meaningful is outputType == Step, otherwise this function returns 0
 func (d *MCellData) StepSize() float64 {
 	return d.stepSize
+}
+
+// OutputTimes returns a slice with the output times corresponding to the
+// column data (either computed from STEP or via ITERATION_LIST/TIME_LIST)
+// NOTE: In the case of STEP we cache the timelist after the first request
+func (d *MCellData) OutputTimes() []float64 {
+	if d.OutputType() == Step && len(d.timeList) == 0 {
+		d.timeList = make([]float64, d.BlockSize())
+		for i := uint64(0); i < d.BlockSize(); i++ {
+			d.timeList[i] = d.StepSize() * float64(i)
+		}
+	}
+	return d.timeList
 }
 
 // BlockDataByName returns the data stored in the data block of the given name
