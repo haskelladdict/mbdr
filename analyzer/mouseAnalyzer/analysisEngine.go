@@ -3,6 +3,11 @@ package main
 import (
 	"fmt"
 	"github.com/haskelladdict/mbdr/libmbd"
+	"log"
+	"math"
+	"math/rand"
+	"sort"
+	"time"
 )
 
 const (
@@ -12,7 +17,11 @@ const (
 	numY        = 16 // number of second sensor (Y) sites
 )
 
-const vesicleFusionEnergy = 40
+const (
+	numActiveSyt        = 3 // how many Ca2+ sites need to be bound for sensors
+	numActiveY          = 1 // to become active
+	vesicleFusionEnergy = 40
+)
 
 // type of binding site (syt or second sensor)
 const (
@@ -31,12 +40,41 @@ type ActEvent struct {
 	sensor    *caSensor // sensor which was activated/deactivated
 	azId      int       // id of vesicle and active zone where activation
 	vesicleID int       // event took place
+	eventIter int       // iteration when event occured
 	activated bool      // activated is set to true and deactivated otherwise
+}
+
+// sort infrastructure for sorting ActEvents according to the event time
+type byIter []ActEvent
+
+func (e byIter) Len() int {
+	return len(e)
+}
+
+func (e byIter) Swap(i, j int) {
+	e[i], e[j] = e[j], e[i]
+}
+
+func (e byIter) Less(i, j int) bool {
+	return e[i].eventIter < e[j].eventIter
+}
+
+// RelEvent keeps track of vesicle release events
+type RelEvent struct {
+	sensors   []*caSensor // list of sensors involved in release event
+	azId      int         // id of vesicle and active zone where activation
+	vesicleID int         // event took place
+	eventIter uint64      // iteration when event occured
 }
 
 var caSensors []caSensor
 
+// random number generator for Metropolis-Hasting
+var rng *rand.Rand
+
 func init() {
+	rng = rand.New(rand.NewSource(time.Now().UnixNano()))
+
 	caSensors = make([]caSensor, numSyt+numY)
 
 	// define synaptogamin and Y sites
@@ -72,10 +110,20 @@ func analyze(data *libmbd.MCellData, seed int, numPulses, sytEnergy, yEnergy int
 
 	for az := 0; az < numAZ; az++ {
 		for ves := 0; ves < numVesicles; ves++ {
-			_, err := extractActivationEvents(data, seed, az, ves)
+			evts, err := extractActivationEvents(data, seed, az, ves)
 			if err != nil {
 				return err
 			}
+			if evts == nil {
+				continue
+			}
+
+			rel, err := extractReleaseEvents(evts, data.NumDataBlocks(), sytEnergy,
+				yEnergy, az, ves)
+			if err != nil {
+				return err
+			}
+			fmt.Println(rel)
 		}
 	}
 
@@ -85,33 +133,152 @@ func analyze(data *libmbd.MCellData, seed int, numPulses, sytEnergy, yEnergy int
 
 // extractActivationEvents returns a slice with actvation and deactivation events
 // for the given vesicle and active zone
-func extractActivationEvents(data *libmbd.MCellData, seed int, az,
-	ves int) ([]ActEvent, error) {
+func extractActivationEvents(data *libmbd.MCellData, seed, az, ves int) ([]ActEvent, error) {
 
 	var events []ActEvent
 	// analyze the activation/deactivation status of each ca sensor.
 	// NOTE: for now we merge the binding data for individual pulses into one
-	for _, sensor := range caSensors {
+	for j := 0; j < len(caSensors); j++ {
+		sensor := caSensors[j]
 		sensorString := "sensor"
+		actThresh := numActiveSyt
 		if sensor.siteType == ySite {
 			sensorString = "sensor_Y"
+			actThresh = numActiveY
 		}
 
+		sensorData := make([]int, data.BlockSize())
 		for _, s := range sensor.sites {
 			for p := 0; p < numPulsesFlag; p++ {
-				dataName := fmt.Sprintf("bound_vesicle_%d_%d_%s_%d_%d.%04d.dat", az, ves,
-					sensorString, s, p, seed)
-				fmt.Println(dataName)
+				dataName := fmt.Sprintf("bound_vesicle_%d_%d_%s_%d_%d.%04d.dat", az+1,
+					ves+1, sensorString, s, p+1, seed)
+				bd, err := data.BlockDataByName(dataName)
+				if err != nil {
+					return nil, err
+				}
+
+				if len(bd.Col) != 1 {
+					return nil, fmt.Errorf("data set %s had more than one data column",
+						dataName)
+				}
+				for i := 0; i < len(sensorData); i++ {
+					sensorData[i] += int(bd.Col[0][i])
+				}
+			}
+		}
+
+		// check for activation events
+		active := false
+		for i, b := range sensorData {
+			if !active && b >= actThresh {
+				active = true
+				events = append(events, ActEvent{&sensor, az, ves, i, active})
+			} else if active && b < actThresh {
+				active = false
+				events = append(events, ActEvent{&sensor, az, ves, i, active})
 			}
 		}
 	}
 	return events, nil
 }
 
+// extractReleaseEvents determines if the given vesicle was released given
+// a list of sensor activation events. If no release took place returns nil.
+func extractReleaseEvents(evts []ActEvent, maxIter uint64, sytEnergy, yEnergy,
+	az, ves int) (*RelEvent, error) {
+
+	if len(evts) == 0 {
+		return nil, fmt.Errorf("attempted to analyze an empty event list")
+	}
+
+	sort.Sort(byIter(evts))
+	activeEvts := make(map[*caSensor]struct{})
+	for i, e := range evts {
+
+		_, present := activeEvts[e.sensor]
+		if e.activated {
+			if present {
+				return nil, fmt.Errorf("trying to add active event that already exists")
+			}
+			activeEvts[e.sensor] = struct{}{}
+		} else {
+			if !present {
+				return nil, fmt.Errorf("trying to remove a nonexisting active event")
+			}
+			delete(activeEvts, e.sensor)
+		}
+
+		// get current total energy
+		var energy int
+		for k, _ := range activeEvts {
+			if k.siteType == sytSite {
+				energy += sytEnergy
+			} else {
+				energy += yEnergy
+			}
+		}
+
+		// Now check for releases given the current energy until next event or
+		// the end of simulation. To do this we basically test for each iteration
+		// between now and the next event if a release takes place using the
+		// Metrolpolis-Hasting algorithm
+		nextIter := maxIter
+		if i < len(evts)-1 {
+			nextIter = uint64(evts[i+1].eventIter)
+		}
+		numIters := nextIter - uint64(e.eventIter)
+		if nextIter < uint64(e.eventIter) {
+			return nil, fmt.Errorf("encountered out of order release event")
+		}
+		if iter, ok := checkForRelease(energy, numIters); ok {
+			var sensors []*caSensor
+			for k, _ := range activeEvts {
+				sensors = append(sensors, k)
+			}
+			return &RelEvent{
+				sensors:   sensors,
+				azId:      az,
+				vesicleID: ves,
+				eventIter: uint64(e.eventIter) + iter,
+			}, nil
+		}
+	}
+	return nil, nil
+}
+
+// checkForReleases uses a Metropolis-Hasting scheme to test numIter times
+// if vesicle release happens given the provided bound sensor energy
+func checkForRelease(energy int, numIters uint64) (uint64, bool) {
+
+	if energy >= vesicleFusionEnergy {
+		return 0, true
+	}
+
+	prob := math.Exp(float64(energy - vesicleFusionEnergy))
+	if prob >= 1 {
+		log.Fatal("probability out of bounds")
+	}
+	for i := uint64(0); i < numIters; i++ {
+		if rng.Float64() < prob {
+			return i, true
+		}
+	}
+	return 0, false
+}
+
 /*
 
+  sensors   []*caSensor // list of sensors involved in release event
+  azId      int         // id of vesicle and active zone where activation
+  vesicleID int         // event took place
+  eventIter int         // iteration when event occured
 
 
+  sensor    *caSensor // sensor which was activated/deactivated
+  azId      int       // id of vesicle and active zone where activation
+  vesicleID int       // event took place
+  eventIter int       // iteration when event occured
+  activated bool      // activated is set to true and deactivated otherwise
 
 
 
