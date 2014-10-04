@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"github.com/haskelladdict/mbdr/libmbd"
 	"log"
+	"strconv"
+	"strings"
 )
 
 var (
@@ -29,6 +31,29 @@ func usage() {
 	flag.PrintDefaults()
 }
 
+// extractSeed attempts to extract the seed from the filename of the provided
+// binary mcell data file.
+// NOTE: the following filenaming convention is assumed *.<seedIDString>.bin.(gz|bz2)
+func extractSeed(fileName string) (int, error) {
+	items := strings.Split(fileName, ".")
+	if len(items) <= 3 {
+		return -1, fmt.Errorf("incorrectly formatted fileName. " +
+			"Expected *.<seedIDString>.bin.(gz|bz2)")
+	}
+
+	for i := len(items) - 1; i >= 0; i-- {
+		if items[i] == "bin" && i >= 1 {
+			seed, err := strconv.Atoi(items[i-1])
+			if err != nil {
+				return -1, err
+			}
+			return seed, nil
+		}
+	}
+	return -1, fmt.Errorf("Unable to extract seed id from filename ", fileName)
+}
+
+// main entry point
 func main() {
 	flag.Parse()
 	if len(flag.Args()) == 0 {
@@ -39,13 +64,19 @@ func main() {
 		log.Fatal("Please provide a non-negative synaptotagmin and y site energy")
 	}
 
-	filename := flag.Args()[0]
-	data, err := libmbd.Read(filename)
+	fileName := flag.Args()[0]
+	seed, err := extractSeed(fileName)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	if err := analyze(data, numPulsesFlag, sytEnergyFlag, yEnergyFlag); err != nil {
+	data, err := libmbd.Read(fileName)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = analyze(data, seed, numPulsesFlag, sytEnergyFlag, yEnergyFlag)
+	if err != nil {
 		log.Fatal(err)
 	}
 }
