@@ -18,7 +18,7 @@ var (
 	addTimesFlag  bool
 	writeFileFlag bool
 	extractFlag   bool
-	extractID     int
+	extractID     uint64
 	extractString string
 )
 
@@ -28,7 +28,7 @@ func init() {
 	flag.BoolVar(&extractFlag, "e", false, "extract dataset")
 	flag.BoolVar(&addTimesFlag, "t", false, "add output times column")
 	flag.BoolVar(&writeFileFlag, "w", false, "write output to file")
-	flag.IntVar(&extractID, "I", 0, "id of dataset to extract")
+	flag.Uint64Var(&extractID, "I", 0, "id of dataset to extract")
 	flag.StringVar(&extractString, "N", "", "name of dataset to extract")
 }
 
@@ -108,10 +108,10 @@ func writeData(d *libmbd.MCellData) {
 			log.Fatal(err)
 		}
 	} else {
-		if data, err = d.BlockDataByID(uint64(extractID)); err != nil {
+		if data, err = d.BlockDataByID(extractID); err != nil {
 			log.Fatal(err)
 		}
-		if name, err = d.IDtoBlockName(uint64(extractID)); err != nil {
+		if name, err = d.IDtoBlockName(extractID); err != nil {
 			log.Fatal(err)
 		}
 	}

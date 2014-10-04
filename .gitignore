@@ -8,8 +8,10 @@
 
 tags
 mbdr
+mouseAnalyzer
 Makefile
 *.swp
+*.DS_Store
 
 # Folders
 _obj
