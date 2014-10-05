@@ -138,16 +138,16 @@ func (d *MCellData) BlockDataByID(id uint64) (*CountData, error) {
 	}
 
 	row := uint64(0)
-	stream := uint64(0)
-	bufLoc := uint64(0)
+	stream := uint64(1)
+	bufLoc := d.outputBufSize * len_double * entry.offset
 	// read all rows until we hit the total blockSize
 	for row < d.blockSize {
 
 		// forward to the next stream block if we're done parsing the current one
-		if row > stream*d.outputBufSize {
+		if row >= stream*d.outputBufSize {
 			offset := d.outputBufSize
 			// last partial block of length <= d.outputBufSize requires special treatment
-			if row-d.blockSize < d.outputBufSize {
+			if d.blockSize-row < d.outputBufSize {
 				offset = d.blockSize - row
 			}
 			// forward to beginning of stream block
