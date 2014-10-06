@@ -18,7 +18,7 @@ const (
 )
 
 const (
-	numActiveSyt        = 3 // how many Ca2+ sites need to be bound for sensors
+	numActiveSyt        = 2 // how many Ca2+ sites need to be bound for sensors
 	numActiveY          = 1 // to become active
 	vesicleFusionEnergy = 40
 )
@@ -37,11 +37,11 @@ type caSensor struct {
 
 // ActEvent keeps track of a single activation/deactivation event
 type ActEvent struct {
-	sensor    *caSensor // sensor which was activated/deactivated
-	azId      int       // id of vesicle and active zone where activation
-	vesicleID int       // event took place
-	eventIter int       // iteration when event occured
-	activated bool      // activated is set to true and deactivated otherwise
+	sensorID  int  // sensor which was activated/deactivated
+	azId      int  // id of vesicle and active zone where activation
+	vesicleID int  // event took place
+	eventIter int  // iteration when event occured
+	activated bool // activated is set to true and deactivated otherwise
 }
 
 // sort infrastructure for sorting ActEvents according to the event time
@@ -61,10 +61,10 @@ func (e byIter) Less(i, j int) bool {
 
 // RelEvent keeps track of vesicle release events
 type RelEvent struct {
-	sensors   []*caSensor // list of sensors involved in release event
-	azId      int         // id of vesicle and active zone where activation
-	vesicleID int         // event took place
-	eventIter uint64      // iteration when event occured
+	sensors   []int  // list of sensors involved in release event
+	azId      int    // id of vesicle and active zone where activation
+	vesicleID int    // event took place
+	eventIter uint64 // iteration when event occured
 }
 
 var caSensors []caSensor
@@ -87,21 +87,21 @@ func init() {
 	caSensors[6] = caSensor{[]int{4, 12, 24, 50, 51}, sytSite}
 	caSensors[7] = caSensor{[]int{10, 25, 26, 27, 28}, sytSite}
 	caSensors[8] = caSensor{[]int{122}, ySite}
-	caSensors[8] = caSensor{[]int{70}, ySite}
-	caSensors[8] = caSensor{[]int{126}, ySite}
-	caSensors[8] = caSensor{[]int{142}, ySite}
-	caSensors[8] = caSensor{[]int{62}, ySite}
-	caSensors[8] = caSensor{[]int{118}, ySite}
-	caSensors[8] = caSensor{[]int{22}, ySite}
-	caSensors[8] = caSensor{[]int{134}, ySite}
-	caSensors[8] = caSensor{[]int{110}, ySite}
-	caSensors[8] = caSensor{[]int{66}, ySite}
-	caSensors[8] = caSensor{[]int{106}, ySite}
-	caSensors[8] = caSensor{[]int{130}, ySite}
-	caSensors[8] = caSensor{[]int{2}, ySite}
-	caSensors[8] = caSensor{[]int{114}, ySite}
-	caSensors[8] = caSensor{[]int{42}, ySite}
-	caSensors[8] = caSensor{[]int{138}, ySite}
+	caSensors[9] = caSensor{[]int{70}, ySite}
+	caSensors[10] = caSensor{[]int{126}, ySite}
+	caSensors[11] = caSensor{[]int{142}, ySite}
+	caSensors[12] = caSensor{[]int{62}, ySite}
+	caSensors[13] = caSensor{[]int{118}, ySite}
+	caSensors[14] = caSensor{[]int{22}, ySite}
+	caSensors[15] = caSensor{[]int{134}, ySite}
+	caSensors[16] = caSensor{[]int{110}, ySite}
+	caSensors[17] = caSensor{[]int{66}, ySite}
+	caSensors[18] = caSensor{[]int{106}, ySite}
+	caSensors[19] = caSensor{[]int{130}, ySite}
+	caSensors[20] = caSensor{[]int{2}, ySite}
+	caSensors[21] = caSensor{[]int{114}, ySite}
+	caSensors[22] = caSensor{[]int{42}, ySite}
+	caSensors[23] = caSensor{[]int{138}, ySite}
 }
 
 // analyze is the main entry point for analyzing the mouse AZ model. It
@@ -118,16 +118,16 @@ func analyze(data *libmbd.MCellData, seed int, numPulses, sytEnergy, yEnergy int
 				continue
 			}
 
-			rel, err := extractReleaseEvents(evts, data.NumDataBlocks(), sytEnergy,
+			rel, err := extractReleaseEvents(evts, data.BlockSize(), sytEnergy,
 				yEnergy, az, ves)
 			if err != nil {
 				return err
 			}
-			fmt.Println(rel)
+			if rel != nil {
+				fmt.Println("found release ", rel)
+			}
 		}
 	}
-
-	fmt.Println("foo", len(caSensors))
 	return nil
 }
 
@@ -138,8 +138,8 @@ func extractActivationEvents(data *libmbd.MCellData, seed, az, ves int) ([]ActEv
 	var events []ActEvent
 	// analyze the activation/deactivation status of each ca sensor.
 	// NOTE: for now we merge the binding data for individual pulses into one
-	for j := 0; j < len(caSensors); j++ {
-		sensor := caSensors[j]
+	for id := 0; id < len(caSensors); id++ {
+		sensor := caSensors[id]
 		sensorString := "sensor"
 		actThresh := numActiveSyt
 		if sensor.siteType == ySite {
@@ -172,10 +172,10 @@ func extractActivationEvents(data *libmbd.MCellData, seed, az, ves int) ([]ActEv
 		for i, b := range sensorData {
 			if !active && b >= actThresh {
 				active = true
-				events = append(events, ActEvent{&sensor, az, ves, i, active})
+				events = append(events, ActEvent{id, az, ves, i, active})
 			} else if active && b < actThresh {
 				active = false
-				events = append(events, ActEvent{&sensor, az, ves, i, active})
+				events = append(events, ActEvent{id, az, ves, i, active})
 			}
 		}
 	}
@@ -192,26 +192,31 @@ func extractReleaseEvents(evts []ActEvent, maxIter uint64, sytEnergy, yEnergy,
 	}
 
 	sort.Sort(byIter(evts))
-	activeEvts := make(map[*caSensor]struct{})
+	activeEvts := make(map[int]struct{})
 	for i, e := range evts {
 
-		_, present := activeEvts[e.sensor]
+		_, present := activeEvts[e.sensorID]
 		if e.activated {
 			if present {
 				return nil, fmt.Errorf("trying to add active event that already exists")
 			}
-			activeEvts[e.sensor] = struct{}{}
+			activeEvts[e.sensorID] = struct{}{}
 		} else {
 			if !present {
 				return nil, fmt.Errorf("trying to remove a nonexisting active event")
 			}
-			delete(activeEvts, e.sensor)
+			delete(activeEvts, e.sensorID)
+		}
+
+		// special case: If the next event happens simultaneously we apply it right away
+		if i+1 < len(evts) && evts[i+1].eventIter == e.eventIter {
+			continue
 		}
 
 		// get current total energy
 		var energy int
-		for k, _ := range activeEvts {
-			if k.siteType == sytSite {
+		for s, _ := range activeEvts {
+			if caSensors[s].siteType == sytSite {
 				energy += sytEnergy
 			} else {
 				energy += yEnergy
@@ -231,9 +236,9 @@ func extractReleaseEvents(evts []ActEvent, maxIter uint64, sytEnergy, yEnergy,
 			return nil, fmt.Errorf("encountered out of order release event")
 		}
 		if iter, ok := checkForRelease(energy, numIters); ok {
-			var sensors []*caSensor
-			for k, _ := range activeEvts {
-				sensors = append(sensors, k)
+			var sensors []int
+			for a, _ := range activeEvts {
+				sensors = append(sensors, a)
 			}
 			return &RelEvent{
 				sensors:   sensors,
@@ -265,31 +270,3 @@ func checkForRelease(energy int, numIters uint64) (uint64, bool) {
 	}
 	return 0, false
 }
-
-/*
-
-  sensors   []*caSensor // list of sensors involved in release event
-  azId      int         // id of vesicle and active zone where activation
-  vesicleID int         // event took place
-  eventIter int         // iteration when event occured
-
-
-  sensor    *caSensor // sensor which was activated/deactivated
-  azId      int       // id of vesicle and active zone where activation
-  vesicleID int       // event took place
-  eventIter int       // iteration when event occured
-  activated bool      // activated is set to true and deactivated otherwise
-
-
-
-
-
-
-
-
-
-
-
-
-
-*/
