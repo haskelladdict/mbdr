@@ -66,6 +66,7 @@ func main() {
 
 	// loop over all provided data sets
 	for _, fileName := range flag.Args() {
+
 		seed, err := extractSeed(fileName)
 		if err != nil {
 			log.Fatal(err)

@@ -47,10 +47,14 @@ func main() {
 		if data, err = libmbd.ReadHeader(filename); err != nil {
 			log.Fatal(err)
 		}
-	} else {
+	} else if extractFlag {
 		if data, err = libmbd.Read(filename); err != nil {
 			log.Fatal(err)
 		}
+	} else {
+		fmt.Println("\nError: Please specify at least one of -i, -l, or -e!\n")
+		usage()
+		return
 	}
 
 	switch {
