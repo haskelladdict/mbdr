@@ -224,8 +224,9 @@ func Read(filename string) (*MCellData, error) {
 func parseData(r io.Reader, data *MCellData) error {
 
 	// compute required capacity of buffer
+	// NOTE: we allocate an additional data.blockSize to avoid re-allocation
 	var err error
-	capacity := data.blockSize*data.totalNumCols*len_double + 10
+	capacity := data.blockSize*data.totalNumCols*len_double + data.blockSize
 	data.buffer, err = readAll(r, int64(capacity))
 	if err != nil {
 		return err
