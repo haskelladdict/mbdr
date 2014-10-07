@@ -64,19 +64,21 @@ func main() {
 		log.Fatal("Please provide a non-negative synaptotagmin and y site energy")
 	}
 
-	fileName := flag.Args()[0]
-	seed, err := extractSeed(fileName)
-	if err != nil {
-		log.Fatal(err)
-	}
+	// loop over all provided data sets
+	for _, fileName := range flag.Args() {
+		seed, err := extractSeed(fileName)
+		if err != nil {
+			log.Fatal(err)
+		}
 
-	data, err := libmbd.Read(fileName)
-	if err != nil {
-		log.Fatal(err)
-	}
+		data, err := libmbd.Read(fileName)
+		if err != nil {
+			log.Fatal(err)
+		}
 
-	err = analyze(data, seed, numPulsesFlag, sytEnergyFlag, yEnergyFlag)
-	if err != nil {
-		log.Fatal(err)
+		err = analyze(data, seed, numPulsesFlag, sytEnergyFlag, yEnergyFlag)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 }

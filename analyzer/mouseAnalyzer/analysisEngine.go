@@ -108,6 +108,7 @@ func init() {
 // determines release events and collects statistics
 func analyze(data *libmbd.MCellData, seed int, numPulses, sytEnergy, yEnergy int) error {
 
+	var releases []*RelEvent
 	for az := 0; az < numAZ; az++ {
 		for ves := 0; ves < numVesicles; ves++ {
 			evts, err := extractActivationEvents(data, seed, az, ves)
@@ -124,10 +125,12 @@ func analyze(data *libmbd.MCellData, seed int, numPulses, sytEnergy, yEnergy int
 				return err
 			}
 			if rel != nil {
-				fmt.Println("found release ", rel)
+				releases = append(releases, rel)
 			}
 		}
 	}
+
+	printReleases(releases)
 	return nil
 }
 
@@ -270,3 +273,23 @@ func checkForRelease(energy int, numIters uint64) (uint64, bool) {
 	}
 	return 0, false
 }
+
+// printReleases prints a summary statistic for all released vesicle for a
+// given seed
+func printReleases(rel []*RelEvent) {
+	fmt.Println(rel)
+}
+
+/*
+
+
+
+
+
+
+
+
+
+
+
+*/
