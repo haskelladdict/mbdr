@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"regexp"
 
 	"github.com/haskelladdict/mbdr/libmbd"
 )
@@ -20,6 +21,7 @@ var (
 	extractFlag   bool
 	extractID     uint64
 	extractString string
+	extractRegex  string
 )
 
 func init() {
@@ -30,6 +32,7 @@ func init() {
 	flag.BoolVar(&writeFileFlag, "w", false, "write output to file")
 	flag.Uint64Var(&extractID, "I", 0, "id of dataset to extract")
 	flag.StringVar(&extractString, "N", "", "name of dataset to extract")
+	flag.StringVar(&extractRegex, "R", "", "regular expression of dataset(s) to extract")
 }
 
 // main function entry point
@@ -65,7 +68,9 @@ func main() {
 		showAvailableData(data)
 
 	case extractFlag:
-		writeData(data)
+		if err := extractData(data); err != nil {
+			log.Fatal(err)
+		}
 	}
 }
 
@@ -106,26 +111,63 @@ func showAvailableData(d *libmbd.MCellData) {
 	}
 }
 
-// writeData extracts the content of a data set either at the requested ID
-// or the provided name and writes it to stdout or a file if requested
+// extractData extracts the content of a data set or data sets either at the
+// requested ID, the provided name, or the regular expression and writes it to
+// stdout or files if requested.
 // NOTE: This routine doesn't bother with converting to integer column data
 // (as determined by DataTypes) and simply prints everything as double
-func writeData(d *libmbd.MCellData) {
-	var data *libmbd.CountData
-	name := extractString
+func extractData(data *libmbd.MCellData) error {
+
+	outputData := make(map[string]*libmbd.CountData)
+	var countData *libmbd.CountData
 	var err error
+
 	if extractString != "" {
-		if data, err = d.BlockDataByName(extractString); err != nil {
-			log.Fatal(err)
+		// if match string was supplied we'll use it
+		if countData, err = data.BlockDataByName(extractString); err != nil {
+			return err
+		}
+		outputData[extractString] = countData
+	} else if extractRegex != "" {
+		// if a regexp string was supplied we try to compile it and then determine
+		// all matches against available data set names
+		regex, err := regexp.Compile(extractRegex)
+		if err != nil {
+			return err
+		}
+		names := data.BlockNames()
+		for _, n := range names {
+			if regex.MatchString(n) {
+				if countData, err = data.BlockDataByName(n); err != nil {
+					return err
+				}
+				outputData[n] = countData
+			}
 		}
 	} else {
-		if data, err = d.BlockDataByID(extractID); err != nil {
-			log.Fatal(err)
+		// otherwise we pick the supplied data set ID to extract (0 by default)
+		if countData, err = data.BlockDataByID(extractID); err != nil {
+			return err
 		}
-		if name, err = d.IDtoBlockName(extractID); err != nil {
-			log.Fatal(err)
+		var name string
+		if name, err = data.IDtoBlockName(extractID); err != nil {
+			return err
+		}
+		outputData[name] = countData
+	}
+
+	for name, col := range outputData {
+		if err = writeData(data, name, col); err != nil {
+			return err
 		}
 	}
+
+	return nil
+}
+
+// writeData writes the supplied count data corresponding to the named data set
+// to stdout or a file
+func writeData(d *libmbd.MCellData, name string, data *libmbd.CountData) error {
 
 	var outputTimes []float64
 	if addTimesFlag {
@@ -133,9 +175,10 @@ func writeData(d *libmbd.MCellData) {
 	}
 
 	output := os.Stdout
+	var err error
 	if writeFileFlag {
 		if output, err = os.Create(name); err != nil {
-			log.Fatal(err)
+			return err
 		}
 	}
 
@@ -151,4 +194,5 @@ func writeData(d *libmbd.MCellData) {
 		}
 		fmt.Fprintf(output, "\n")
 	}
+	return nil
 }
