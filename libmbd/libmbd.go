@@ -1,10 +1,11 @@
 package libmbd
 
 import (
+	"bytes"
 	"compress/bzip2"
 	"encoding/binary"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math"
 	"os"
 )
@@ -172,8 +173,30 @@ func (d *MCellData) BlockDataByID(id uint64) (*CountData, error) {
 	return output, nil
 }
 
-// Read opens the binary mcell data file and attempts to parse its content
-// into a Data buffer struct.
+// ReadHeader opens the binary mcell data file and parses the header without
+// reading the actual data. This provides efficient access to metadata and
+// the names of stored data blocks. After calling this function the buffer
+// field of MCellData is set to nil since no data is parsed.
+func ReadHeader(filename string) (*MCellData, error) {
+	fileRaw, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer fileRaw.Close()
+	file := bzip2.NewReader(fileRaw)
+
+	var data MCellData
+	err = parseHeader(file, &data)
+	if err != nil {
+		return nil, err
+	}
+
+	return &data, nil
+}
+
+// Read header opens the binary mcell data file and parses the header and the
+// actual data stored. If only access to the metadata is required, it is much
+// more efficient to only call ReadHeader directly.
 func Read(filename string) (*MCellData, error) {
 	fileRaw, err := os.Open(filename)
 	if err != nil {
@@ -183,12 +206,12 @@ func Read(filename string) (*MCellData, error) {
 	file := bzip2.NewReader(fileRaw)
 
 	var data MCellData
-	data.buffer, err = ioutil.ReadAll(file)
+	err = parseHeader(file, &data)
 	if err != nil {
 		return nil, err
 	}
 
-	err = parseHeader(&data)
+	err = parseData(file, &data)
 	if err != nil {
 		return nil, err
 	}
@@ -196,76 +219,130 @@ func Read(filename string) (*MCellData, error) {
 	return &data, nil
 }
 
+// parseData read all of the binary count data into MCellData's properly
+// preallocated []byte buffer
+func parseData(r io.Reader, data *MCellData) error {
+
+	// compute required capacity of buffer
+	var err error
+	capacity := data.blockSize*data.totalNumCols*len_double + 10
+	data.buffer, err = readAll(r, int64(capacity))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // checkAPITag reads the API tag inside the data set and makes sure it
 // matches the required version
-func checkAPITag(data *MCellData) error {
-	receivedAPITag := string(data.buffer[:len(requiredAPITag)])
-	if receivedAPITag != requiredAPITag {
+func checkAPITag(r io.Reader) error {
+	receivedAPITag := make([]byte, len(requiredAPITag))
+	if _, err := io.ReadFull(r, receivedAPITag); err != nil {
+		return err
+	}
+	if string(receivedAPITag) != requiredAPITag {
 		return fmt.Errorf("incorrect API Tag %s", receivedAPITag)
 	}
-
-	data.buffer = data.buffer[len(requiredAPITag)+1:]
 	return nil
 }
 
 // parseBlockInfo reads the pertinent data block information such as the
 // time step, time list, number of data blocks etc.
-func parseBlockInfo(data *MCellData) error {
+func parseBlockInfo(r io.Reader, data *MCellData) error {
 
-	data.outputType = data.buffer.uint16()
-	data.blockSize = data.buffer.uint64()
+	var err error
+	if data.outputType, err = readUint16(r); err != nil {
+		return err
+	}
 
-	length := data.buffer.uint64()
+	if data.blockSize, err = readUint64(r); err != nil {
+		return err
+	}
+
+	var length uint64
+	if length, err = readUint64(r); err != nil {
+		return err
+	}
+
 	switch data.outputType {
 	case Step:
-		data.stepSize = data.buffer.float64()
+		if data.stepSize, err = readFloat64(r); err != nil {
+			return err
+		}
 
 	case TimeList:
+		var time float64
 		for i := uint64(0); i < length; i++ {
-			data.timeList = append(data.timeList, data.buffer.float64())
+			if time, err = readFloat64(r); err != nil {
+				return err
+			}
+			data.timeList = append(data.timeList, time)
 		}
 
 	case IterationList:
+		var iter float64
 		for i := uint64(0); i < length; i++ {
-			data.timeList = append(data.timeList, data.buffer.float64())
+			if iter, err = readFloat64(r); err != nil {
+				return err
+			}
+			data.timeList = append(data.timeList, iter)
 		}
 
 	default:
 		return fmt.Errorf("encountered unknown data output type")
 	}
 
-	data.outputBufSize = data.buffer.uint64()
-	data.numBlocks = data.buffer.uint64()
+	if data.outputBufSize, err = readUint64(r); err != nil {
+		return err
+	}
+
+	if data.numBlocks, err = readUint64(r); err != nil {
+		return err
+	}
 
 	return nil
 }
 
 // parseBlockNames extract the names of data blocks contained with the data file
-func parseBlockNames(data *MCellData) error {
+func parseBlockNames(r io.Reader, data *MCellData) error {
 
 	// initialize blockname map
 	data.blockNameMap = make(map[string]uint64)
 
 	var totalCols uint64
+	var err error
+	buf := []byte{0}
 	for count := uint64(0); count < data.numBlocks; count++ {
 
 		e := blockData{}
 		e.offset = totalCols
-		var i int
 
 		// find end of next block name
-		for string(data.buffer[i]) != "\x00" {
-			i++
+		var nameBuf bytes.Buffer
+		for {
+			if _, err = io.ReadFull(r, buf); err != nil {
+				return err
+			}
+			if string(buf) == "\x00" {
+				break
+			}
+			nameBuf.Write(buf)
 		}
-		e.name = string(data.buffer[:i])
+
+		e.name = nameBuf.String()
 		data.blockNames = append(data.blockNames, e.name)
 		data.blockNameMap[e.name] = count
-		data.buffer = data.buffer[i+1:]
 
-		e.numCols = data.buffer.uint64()
+		if e.numCols, err = readUint64(r); err != nil {
+			return err
+		}
 		totalCols += e.numCols
 		for c := uint64(0); c < e.numCols; c++ {
-			e.dataTypes = append(e.dataTypes, data.buffer.uint16())
+			dataType, err := readUint16(r)
+			if err != nil {
+				return err
+			}
+			e.dataTypes = append(e.dataTypes, dataType)
 		}
 		data.blockInfo = append(data.blockInfo, e)
 	}
@@ -277,17 +354,23 @@ func parseBlockNames(data *MCellData) error {
 // parseHeader reads the header of the binary mcell data file to check the API
 // version and retrieve general information regarding the data contained
 // within (number of datablocks, block names, ...).
-func parseHeader(data *MCellData) error {
+func parseHeader(r io.Reader, data *MCellData) error {
 
-	if err := checkAPITag(data); err != nil {
+	if err := checkAPITag(r); err != nil {
 		return err
 	}
 
-	if err := parseBlockInfo(data); err != nil {
+	// skip next byte - this is a defect in the mcell binary output format
+	dummy := make([]byte, 1)
+	if _, err := io.ReadFull(r, dummy); err != nil {
 		return err
 	}
 
-	if err := parseBlockNames(data); err != nil {
+	if err := parseBlockInfo(r, data); err != nil {
+		return err
+	}
+
+	if err := parseBlockNames(r, data); err != nil {
 		return err
 	}
 
@@ -302,29 +385,74 @@ type readBuf []byte
 
 func (b *readBuf) uint16() uint16 {
 	v := binary.LittleEndian.Uint16(*b)
-	*b = (*b)[2:]
-	return v
-}
-
-func (b *readBuf) uint32() uint32 {
-	v := binary.LittleEndian.Uint32(*b)
-	*b = (*b)[4:]
+	//	*b = (*b)[2:]
 	return v
 }
 
 func (b *readBuf) uint64() uint64 {
 	v := binary.LittleEndian.Uint64(*b)
-	*b = (*b)[8:]
+	//	*b = (*b)[8:]
 	return v
 }
 
 func (b *readBuf) float64() float64 {
 	v := math.Float64frombits(binary.LittleEndian.Uint64(*b))
-	*b = (*b)[8:]
+	//	*b = (*b)[8:]
 	return v
 }
 
 func (b *readBuf) float64NoSlice() float64 {
 	v := math.Float64frombits(binary.LittleEndian.Uint64(*b))
 	return v
+}
+
+// readUint16 reads an uint16 from a io.Reader
+func readUint16(r io.Reader) (uint16, error) {
+	buf := make(readBuf, 2)
+	if _, err := io.ReadFull(r, buf); err != nil {
+		return 0, err
+	}
+	return buf.uint16(), nil
+}
+
+// readUint64 reads an uint64 from an io.Reader
+func readUint64(r io.Reader) (uint64, error) {
+	buf := make(readBuf, 8)
+	if _, err := io.ReadFull(r, buf); err != nil {
+		return 0, err
+	}
+	return buf.uint64(), nil
+}
+
+// readFloat64 reads a float64 from an io.Reader
+func readFloat64(r io.Reader) (float64, error) {
+	buf := make(readBuf, 8)
+	if _, err := io.ReadFull(r, buf); err != nil {
+		return 0, err
+	}
+	return buf.float64(), nil
+}
+
+// readAll is taken verbatim from ioutil in the standard library and we use
+// it to read the binary count data into a preallocated buffer of the correct
+// size. Using a correctly preallocated buffer is critical especially for large
+// binary data files in the multi GB range to avoid excessive memory use due
+// to uncollected memory
+func readAll(r io.Reader, capacity int64) (b []byte, err error) {
+	buf := bytes.NewBuffer(make([]byte, 0, capacity))
+	// If the buffer overflows, we will get bytes.ErrTooLarge.
+	// Return that as an error. Any other panic remains.
+	defer func() {
+		e := recover()
+		if e == nil {
+			return
+		}
+		if panicErr, ok := e.(error); ok && panicErr == bytes.ErrTooLarge {
+			err = panicErr
+		} else {
+			panic(e)
+		}
+	}()
+	_, err = buf.ReadFrom(r)
+	return buf.Bytes(), err
 }

@@ -41,9 +41,16 @@ func main() {
 	}
 
 	filename := flag.Args()[0]
-	data, err := libmbd.Read(filename)
-	if err != nil {
-		log.Fatal(err)
+	var data *libmbd.MCellData
+	var err error
+	if infoFlag || listFlag {
+		if data, err = libmbd.ReadHeader(filename); err != nil {
+			log.Fatal(err)
+		}
+	} else {
+		if data, err = libmbd.Read(filename); err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	switch {
