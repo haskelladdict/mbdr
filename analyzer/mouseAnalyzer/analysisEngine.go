@@ -59,8 +59,8 @@ func (e byIter) Less(i, j int) bool {
 	return e[i].eventIter < e[j].eventIter
 }
 
-// RelEvent keeps track of vesicle release events
-type RelEvent struct {
+// ReleaseEvent keeps track of vesicle release events
+type ReleaseEvent struct {
 	sensors   []int  // list of sensors involved in release event
 	azId      int    // id of vesicle and active zone where activation
 	vesicleID int    // event took place
@@ -108,7 +108,7 @@ func init() {
 // determines release events and collects statistics
 func analyze(data *libmbd.MCellData, seed int, numPulses, sytEnergy, yEnergy int) error {
 
-	var releases []*RelEvent
+	var releases []*ReleaseEvent
 	for az := 0; az < numAZ; az++ {
 		for ves := 0; ves < numVesicles; ves++ {
 			evts, err := extractActivationEvents(data, seed, az, ves)
@@ -130,7 +130,7 @@ func analyze(data *libmbd.MCellData, seed int, numPulses, sytEnergy, yEnergy int
 		}
 	}
 
-	printReleases(releases)
+	printReleases(data, seed, releases)
 	return nil
 }
 
@@ -188,7 +188,7 @@ func extractActivationEvents(data *libmbd.MCellData, seed, az, ves int) ([]ActEv
 // extractReleaseEvents determines if the given vesicle was released given
 // a list of sensor activation events. If no release took place returns nil.
 func extractReleaseEvents(evts []ActEvent, maxIter uint64, sytEnergy, yEnergy,
-	az, ves int) (*RelEvent, error) {
+	az, ves int) (*ReleaseEvent, error) {
 
 	if len(evts) == 0 {
 		return nil, fmt.Errorf("attempted to analyze an empty event list")
@@ -243,7 +243,7 @@ func extractReleaseEvents(evts []ActEvent, maxIter uint64, sytEnergy, yEnergy,
 			for a, _ := range activeEvts {
 				sensors = append(sensors, a)
 			}
-			return &RelEvent{
+			return &ReleaseEvent{
 				sensors:   sensors,
 				azId:      az,
 				vesicleID: ves,
@@ -273,23 +273,3 @@ func checkForRelease(energy int, numIters uint64) (uint64, bool) {
 	}
 	return 0, false
 }
-
-// printReleases prints a summary statistic for all released vesicle for a
-// given seed
-func printReleases(rel []*RelEvent) {
-	fmt.Println(rel)
-}
-
-/*
-
-
-
-
-
-
-
-
-
-
-
-*/

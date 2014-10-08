@@ -53,6 +53,21 @@ func extractSeed(fileName string) (int, error) {
 	return -1, fmt.Errorf("Unable to extract seed id from filename ", fileName)
 }
 
+// printReleases prints a summary statistic for all released vesicle for a
+// given seed
+func printReleases(data *libmbd.MCellData, seed int, rel []*ReleaseEvent) {
+	timeStep := data.StepSize()
+	for _, r := range rel {
+		fmt.Printf("seed : %d   AZ : %d   ves : %d   time : %e", seed, r.azId+1,
+			r.vesicleID+1, float64(r.eventIter)*timeStep)
+		fmt.Printf("  sensors: [")
+		for _, s := range r.sensors {
+			fmt.Printf("%d ", s)
+		}
+		fmt.Printf("]\n")
+	}
+}
+
 // main entry point
 func main() {
 	flag.Parse()
