@@ -13,15 +13,25 @@ import (
 )
 
 var (
-	numPulsesFlag int // number of AP pulses
-	sytEnergyFlag int // energy of activated synaptotagmin toward vesicle fusion
-	yEnergyFlag   int // energy of activated Y sites toward vesicle fusion
+	numPulses      int  // number of AP pulses
+	energyModel    bool // use the energy model
+	sytEnergy      int  // energy of activated synaptotagmin toward vesicle fusion
+	yEnergy        int  // energy of activated Y sites toward vesicle fusion
+	numActiveSites int  // number of simultaneously active sites required for release
+	//ISIValue      int // interstimulus interval
 )
 
 func init() {
-	flag.IntVar(&numPulsesFlag, "n", 1, "number of AP pulses in the model")
-	flag.IntVar(&sytEnergyFlag, "s", -1, "energy of active synaptotagmin sites")
-	flag.IntVar(&yEnergyFlag, "y", -1, "energy of active y sites")
+	flag.IntVar(&numPulses, "p", 1, "number of AP pulses in the model")
+	flag.IntVar(&sytEnergy, "s", -1, "energy of active synaptotagmin sites "+
+		"(required with -e flag)")
+	flag.IntVar(&yEnergy, "y", -1, "energy of active y sites "+
+		"(required with -e flag")
+	flag.BoolVar(&energyModel, "e", false, "use the energy model instead of "+
+		"deterministic model")
+	flag.IntVar(&numActiveSites, "n", 0, "number of sites required for activation"+
+		"for deterministic model")
+	//flag.IntVar(&ISIValue, "i", -1, "energy of active y sites")
 }
 
 // usage prints a brief usage information to stdout
@@ -75,8 +85,14 @@ func main() {
 		usage()
 		return
 	}
-	if sytEnergyFlag < 0 || yEnergyFlag < 0 {
+
+	// some sanity checks
+	if energyModel && (sytEnergy < 0 || yEnergy < 0) {
 		log.Fatal("Please provide a non-negative synaptotagmin and y site energy")
+	}
+
+	if !energyModel && numActiveSites == 0 {
+		log.Fatal("Please provide a positive count for the number of required active sites")
 	}
 
 	// loop over all provided data sets
@@ -92,7 +108,8 @@ func main() {
 			log.Fatal(err)
 		}
 
-		err = analyze(data, seed, numPulsesFlag, sytEnergyFlag, yEnergyFlag)
+		err = analyze(data, energyModel, seed, numPulses, numActiveSites, sytEnergy,
+			yEnergy)
 		if err != nil {
 			log.Fatal(err)
 		}

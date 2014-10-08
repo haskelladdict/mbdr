@@ -106,12 +106,13 @@ func init() {
 
 // analyze is the main entry point for analyzing the mouse AZ model. It
 // determines release events and collects statistics
-func analyze(data *libmbd.MCellData, seed int, numPulses, sytEnergy, yEnergy int) error {
+func analyze(data *libmbd.MCellData, energyModel bool, seed, numPulses,
+	numActiveSites, sytEnergy, yEnergy int) error {
 
 	var releases []*ReleaseEvent
 	for az := 0; az < numAZ; az++ {
 		for ves := 0; ves < numVesicles; ves++ {
-			evts, err := extractActivationEvents(data, seed, az, ves)
+			evts, err := extractActivationEvents(data, numPulses, seed, az, ves)
 			if err != nil {
 				return err
 			}
@@ -119,8 +120,8 @@ func analyze(data *libmbd.MCellData, seed int, numPulses, sytEnergy, yEnergy int
 				continue
 			}
 
-			rel, err := extractReleaseEvents(evts, data.BlockSize(), sytEnergy,
-				yEnergy, az, ves)
+			rel, err := extractReleaseEvents(evts, data.BlockSize(), energyModel,
+				numActiveSites, sytEnergy, yEnergy, az, ves)
 			if err != nil {
 				return err
 			}
@@ -136,7 +137,8 @@ func analyze(data *libmbd.MCellData, seed int, numPulses, sytEnergy, yEnergy int
 
 // extractActivationEvents returns a slice with actvation and deactivation events
 // for the given vesicle and active zone
-func extractActivationEvents(data *libmbd.MCellData, seed, az, ves int) ([]ActEvent, error) {
+func extractActivationEvents(data *libmbd.MCellData, numPulses, seed, az,
+	ves int) ([]ActEvent, error) {
 
 	var events []ActEvent
 	// analyze the activation/deactivation status of each ca sensor.
@@ -152,7 +154,7 @@ func extractActivationEvents(data *libmbd.MCellData, seed, az, ves int) ([]ActEv
 
 		sensorData := make([]int, data.BlockSize())
 		for _, s := range sensor.sites {
-			for p := 0; p < numPulsesFlag; p++ {
+			for p := 0; p < numPulses; p++ {
 				dataName := fmt.Sprintf("bound_vesicle_%d_%d_%s_%d_%d.%04d.dat", az+1,
 					ves+1, sensorString, s, p+1, seed)
 				bd, err := data.BlockDataByName(dataName)
@@ -187,12 +189,8 @@ func extractActivationEvents(data *libmbd.MCellData, seed, az, ves int) ([]ActEv
 
 // extractReleaseEvents determines if the given vesicle was released given
 // a list of sensor activation events. If no release took place returns nil.
-func extractReleaseEvents(evts []ActEvent, maxIter uint64, sytEnergy, yEnergy,
-	az, ves int) (*ReleaseEvent, error) {
-
-	if len(evts) == 0 {
-		return nil, fmt.Errorf("attempted to analyze an empty event list")
-	}
+func extractReleaseEvents(evts []ActEvent, maxIter uint64, energyModel bool,
+	numActiveSites, sytEnergy, yEnergy, az, ves int) (*ReleaseEvent, error) {
 
 	sort.Sort(byIter(evts))
 	activeEvts := make(map[int]struct{})
@@ -215,34 +213,22 @@ func extractReleaseEvents(evts []ActEvent, maxIter uint64, sytEnergy, yEnergy,
 			continue
 		}
 
-		// get current total energy and count the number of active syts
-		energy, activeSyts := getEnergy(activeEvts, sytEnergy, yEnergy)
-
-		// we need at least a single syt bound for release to happen, otherwise we
-		// can skip the release check and go to the next event
-		if activeSyts == 0 {
-			continue
+		var rel *ReleaseEvent
+		var relError error
+		if energyModel {
+			// use the energy model to determine release
+			energy := getEnergy(activeEvts, sytEnergy, yEnergy)
+			nextIter := getNextIter(i, maxIter, evts)
+			rel, relError = checkForEnergyRelease(energy, az, ves, e, activeEvts, nextIter)
+		} else {
+			// use the deterministic model to determine release
+			rel, relError = checkForDeterministicRelease(az, ves, numActiveSites, e, activeEvts)
 		}
-
-		// Now check for releases given the current energy until next event or
-		// the end of simulation. To do this we basically test for each iteration
-		// between now and the next event if a release takes place using the
-		// Metrolpolis-Hasting algorithm
-		nextIter := maxIter
-		if i < len(evts)-1 {
-			nextIter = uint64(evts[i+1].eventIter)
+		if relError != nil {
+			return nil, relError
 		}
-		numIters := nextIter - uint64(e.eventIter)
-		if nextIter < uint64(e.eventIter) {
-			return nil, fmt.Errorf("encountered out of order release event")
-		}
-		if iter, ok := checkForRelease(energy, numIters); ok {
-			var sensors []int
-			for a, _ := range activeEvts {
-				sensors = append(sensors, a)
-			}
-			return &ReleaseEvent{sensors: sensors, azId: az, vesicleID: ves,
-				eventIter: uint64(e.eventIter) + iter}, nil
+		if rel != nil {
+			return rel, nil
 		}
 	}
 	return nil, nil
@@ -250,18 +236,65 @@ func extractReleaseEvents(evts []ActEvent, maxIter uint64, sytEnergy, yEnergy,
 
 // getEnergy computes the total energy corresponding to the current number
 // of active synaptotagmin and Y sites. Also returns the number of active syts
-func getEnergy(events map[int]struct{}, sytEnergy, yEnergy int) (int, int) {
+func getEnergy(events map[int]struct{}, sytEnergy, yEnergy int) int {
 	var energy int
-	var activeSyts int
 	for s, _ := range events {
 		if caSensors[s].siteType == sytSite {
 			energy += sytEnergy
-			activeSyts++
 		} else {
 			energy += yEnergy
 		}
 	}
-	return energy, activeSyts
+	return energy
+}
+
+// getNextIter determines the iteration of the next event that will happen in
+// the event queue
+func getNextIter(iter int, maxIter uint64, evts []ActEvent) uint64 {
+	nextIter := maxIter
+	if iter < len(evts)-1 {
+		nextIter = uint64(evts[iter+1].eventIter)
+	}
+	return nextIter
+}
+
+// checkForDeterministicRelease tests if vesicles are released according
+// to a deterministic critertion, i.e. as soon as numActiveSites syt or
+// Y sites are active
+func checkForDeterministicRelease(az, ves, numActiveSites int, evt ActEvent,
+	activeEvts map[int]struct{}) (*ReleaseEvent, error) {
+	if len(activeEvts) == numActiveSites {
+		var sensors []int
+		for a, _ := range activeEvts {
+			sensors = append(sensors, a)
+		}
+		return &ReleaseEvent{sensors: sensors, azId: az, vesicleID: ves,
+			eventIter: uint64(evt.eventIter)}, nil
+	}
+	return nil, nil
+}
+
+// checkForEnergyRelease tests if an energy release according to specified
+// syt and y site energies takes place. Check for releases given the current
+// energy until next event or the end of simulation. To do this we basically
+// test for each iteration between now and the next event if a release takes
+// place using the Metrolpolis-Hasting algorithm
+func checkForEnergyRelease(energy, az, ves int, evt ActEvent,
+	activeEvts map[int]struct{}, nextIter uint64) (*ReleaseEvent, error) {
+
+	numIters := nextIter - uint64(evt.eventIter)
+	if nextIter < uint64(evt.eventIter) {
+		return nil, fmt.Errorf("encountered out of order release event")
+	}
+	if iter, ok := checkForRelease(energy, numIters); ok {
+		var sensors []int
+		for a, _ := range activeEvts {
+			sensors = append(sensors, a)
+		}
+		return &ReleaseEvent{sensors: sensors, azId: az, vesicleID: ves,
+			eventIter: uint64(evt.eventIter) + iter}, nil
+	}
+	return nil, nil
 }
 
 // checkForReleases uses a Metropolis-Hasting scheme to test numIter times
