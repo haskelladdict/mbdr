@@ -197,7 +197,6 @@ func extractReleaseEvents(evts []ActEvent, maxIter uint64, sytEnergy, yEnergy,
 	sort.Sort(byIter(evts))
 	activeEvts := make(map[int]struct{})
 	for i, e := range evts {
-
 		_, present := activeEvts[e.sensorID]
 		if e.activated {
 			if present {
@@ -216,14 +215,13 @@ func extractReleaseEvents(evts []ActEvent, maxIter uint64, sytEnergy, yEnergy,
 			continue
 		}
 
-		// get current total energy
-		var energy int
-		for s, _ := range activeEvts {
-			if caSensors[s].siteType == sytSite {
-				energy += sytEnergy
-			} else {
-				energy += yEnergy
-			}
+		// get current total energy and count the number of active syts
+		energy, activeSyts := getEnergy(activeEvts, sytEnergy, yEnergy)
+
+		// we need at least a single syt bound for release to happen, otherwise we
+		// can skip the release check and go to the next event
+		if activeSyts == 0 {
+			continue
 		}
 
 		// Now check for releases given the current energy until next event or
@@ -243,15 +241,27 @@ func extractReleaseEvents(evts []ActEvent, maxIter uint64, sytEnergy, yEnergy,
 			for a, _ := range activeEvts {
 				sensors = append(sensors, a)
 			}
-			return &ReleaseEvent{
-				sensors:   sensors,
-				azId:      az,
-				vesicleID: ves,
-				eventIter: uint64(e.eventIter) + iter,
-			}, nil
+			return &ReleaseEvent{sensors: sensors, azId: az, vesicleID: ves,
+				eventIter: uint64(e.eventIter) + iter}, nil
 		}
 	}
 	return nil, nil
+}
+
+// getEnergy computes the total energy corresponding to the current number
+// of active synaptotagmin and Y sites. Also returns the number of active syts
+func getEnergy(events map[int]struct{}, sytEnergy, yEnergy int) (int, int) {
+	var energy int
+	var activeSyts int
+	for s, _ := range events {
+		if caSensors[s].siteType == sytSite {
+			energy += sytEnergy
+			activeSyts++
+		} else {
+			energy += yEnergy
+		}
+	}
+	return energy, activeSyts
 }
 
 // checkForReleases uses a Metropolis-Hasting scheme to test numIter times
