@@ -8,17 +8,20 @@ import (
 	"fmt"
 	"github.com/haskelladdict/mbdr/libmbd"
 	"log"
+	"math"
+	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var (
-	numPulses      int  // number of AP pulses
-	energyModel    bool // use the energy model
-	sytEnergy      int  // energy of activated synaptotagmin toward vesicle fusion
-	yEnergy        int  // energy of activated Y sites toward vesicle fusion
-	numActiveSites int  // number of simultaneously active sites required for release
-	//ISIValue      int // interstimulus interval
+	numPulses      int     // number of AP pulses
+	energyModel    bool    // use the energy model
+	sytEnergy      int     // energy of activated synaptotagmin toward vesicle fusion
+	yEnergy        int     // energy of activated Y sites toward vesicle fusion
+	numActiveSites int     // number of simultaneously active sites required for release
+	isiValue       float64 // interstimulus interval
 )
 
 func init() {
@@ -31,7 +34,8 @@ func init() {
 		"deterministic model")
 	flag.IntVar(&numActiveSites, "n", 0, "number of sites required for activation"+
 		"for deterministic model")
-	//flag.IntVar(&ISIValue, "i", -1, "energy of active y sites")
+	flag.Float64Var(&isiValue, "i", -1.0, "pulse duration in [s] for analysis multi "+
+		"pulse data")
 }
 
 // usage prints a brief usage information to stdout
@@ -66,6 +70,22 @@ func extractSeed(fileName string) (int, error) {
 // printReleases prints a summary statistic for all released vesicle for a
 // given seed
 func printReleases(data *libmbd.MCellData, seed int, rel []*ReleaseEvent) {
+	fmt.Println("mouseAnalyzer ran on", time.Now())
+	if host, err := os.Hostname(); err == nil {
+		fmt.Println("on ", host)
+	}
+	fmt.Println("\n-------------- parameters --------------")
+	fmt.Println("number of pulses       : ", numPulses)
+	fmt.Println("ISI                    : ", isiValue)
+	if energyModel {
+		fmt.Println("model                  : energy model")
+		fmt.Println("syt energy             : ", sytEnergy)
+		fmt.Println("y energy               : ", yEnergy)
+	} else {
+		fmt.Println("model                  : deterministic model")
+		fmt.Println("number of active sites : ", numActiveSites)
+	}
+	fmt.Println("------------- data --------------------\n")
 	timeStep := data.StepSize()
 	for _, r := range rel {
 
@@ -74,8 +94,11 @@ func printReleases(data *libmbd.MCellData, seed int, rel []*ReleaseEvent) {
 			log.Fatal(err)
 		}
 
-		fmt.Printf("seed : %d   AZ : %d   ves : %d   time : %e", seed, r.azId+1,
-			r.vesicleID+1, float64(r.eventIter)*timeStep)
+		eventTime := float64(r.eventIter) * timeStep
+		pulseID := int(math.Floor(eventTime/isiValue)) + 1
+
+		fmt.Printf("seed : %d   AZ : %d   ves : %d   time : %e   pulseID : %d", seed,
+			r.azId+1, r.vesicleID+1, eventTime, pulseID)
 		fmt.Printf("  sensors: [")
 		for _, s := range r.sensors {
 			fmt.Printf("%d ", s)
@@ -148,6 +171,10 @@ func main() {
 
 	if !energyModel && numActiveSites == 0 {
 		log.Fatal("Please provide a positive count for the number of required active sites")
+	}
+
+	if numPulses > 1 && isiValue <= 0 {
+		log.Fatal("Analysis multi-pulse data requires a non-zero ISI value.")
 	}
 
 	// loop over all provided data sets
