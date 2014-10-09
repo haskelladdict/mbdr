@@ -10,6 +10,7 @@ import (
 	"log"
 	"math"
 	"os"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -78,7 +79,7 @@ func printHeader() {
 	fmt.Println("\n-------------- parameters --------------")
 	fmt.Println("number of pulses       :", numPulses)
 	if numPulses > 1 {
-		fmt.Println("ISI                    :", isiValue)
+		fmt.Println("ISI                    :", isiValue, "s")
 	}
 	if energyModel {
 		fmt.Println("model                  : energy model")
@@ -204,5 +205,9 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
+		// NOTE: This is a bit of a hack but since we're dealing with potentially
+		// large data sets we need to make sure to free memory before we start
+		// working on the next one
+		debug.FreeOSMemory()
 	}
 }
