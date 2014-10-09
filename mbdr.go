@@ -5,12 +5,11 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"regexp"
 
 	"github.com/haskelladdict/mbdr/libmbd"
 )
 
-const mbdrVersion = 2
+const mbdrVersion = 3
 
 // command line flags
 var (
@@ -129,20 +128,8 @@ func extractData(data *libmbd.MCellData) error {
 		}
 		outputData[extractString] = countData
 	} else if extractRegex != "" {
-		// if a regexp string was supplied we try to compile it and then determine
-		// all matches against available data set names
-		regex, err := regexp.Compile(extractRegex)
-		if err != nil {
+		if outputData, err = data.BlockDataByRegex(extractRegex); err != nil {
 			return err
-		}
-		names := data.BlockNames()
-		for _, n := range names {
-			if regex.MatchString(n) {
-				if countData, err = data.BlockDataByName(n); err != nil {
-					return err
-				}
-				outputData[n] = countData
-			}
 		}
 	} else {
 		// otherwise we pick the supplied data set ID to extract (0 by default)

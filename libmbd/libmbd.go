@@ -8,6 +8,7 @@ import (
 	"io"
 	"math"
 	"os"
+	"regexp"
 )
 
 const requiredAPITag = "MCELL_BINARY_API_2"
@@ -110,6 +111,30 @@ func (d *MCellData) OutputTimes() []float64 {
 		}
 	}
 	return d.timeList
+}
+
+// BlockDataByRegex returns a map with all datasets whose name matched the
+// supplied regex. The map keys are the dataset names, the values are the
+// corresponding count data items.
+func (d *MCellData) BlockDataByRegex(selection string) (map[string]*CountData, error) {
+
+	regex, err := regexp.Compile(selection)
+	if err != nil {
+		return nil, err
+	}
+
+	outputData := make(map[string]*CountData)
+	names := d.BlockNames()
+	for _, n := range names {
+		if regex.MatchString(n) {
+			countData, err := d.BlockDataByName(n)
+			if err != nil {
+				return nil, err
+			}
+			outputData[n] = countData
+		}
+	}
+	return outputData, nil
 }
 
 // BlockDataByName returns the data stored in the data block of the given name

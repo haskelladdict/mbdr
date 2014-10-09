@@ -68,6 +68,13 @@ func extractSeed(fileName string) (int, error) {
 func printReleases(data *libmbd.MCellData, seed int, rel []*ReleaseEvent) {
 	timeStep := data.StepSize()
 	for _, r := range rel {
+
+		/*
+			caContrib, err := determineCaContrib(data, rel)
+			if err != nil {
+				log.Fatal(err)
+			}
+		*/
 		fmt.Printf("seed : %d   AZ : %d   ves : %d   time : %e", seed, r.azId+1,
 			r.vesicleID+1, float64(r.eventIter)*timeStep)
 		fmt.Printf("  sensors: [")
@@ -77,6 +84,18 @@ func printReleases(data *libmbd.MCellData, seed int, rel []*ReleaseEvent) {
 		fmt.Printf("]\n")
 	}
 }
+
+/*
+// determineCaContrib determines which Ca channels contributed to the release
+// of a particular vesicle.
+// NOTE: We try to be as agnostic as we can in terms of the particular
+// nomenclature used for naming the channels. However, the expectation is
+// that data files tracking Ca binding to vesicles are named
+// vesicle_<az>_<1|2>_ca_<ca naming>.<seed>.dat
+func determineCaContrib(data *libmbd.MCellData, rel *ReleaseEvent) (map[string]int, error) {
+
+}
+*/
 
 // main entry point
 func main() {
