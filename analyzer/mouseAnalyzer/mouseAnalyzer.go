@@ -22,6 +22,7 @@ var (
 	yEnergy        int     // energy of activated Y sites toward vesicle fusion
 	numActiveSites int     // number of simultaneously active sites required for release
 	isiValue       float64 // interstimulus interval
+
 )
 
 func init() {
@@ -67,25 +68,32 @@ func extractSeed(fileName string) (int, error) {
 	return -1, fmt.Errorf("Unable to extract seed id from filename ", fileName)
 }
 
-// printReleases prints a summary statistic for all released vesicle for a
-// given seed
-func printReleases(data *libmbd.MCellData, seed int, rel []*ReleaseEvent) {
+// printHeader prints and informative header file with date and commandline
+// options requested for analysis
+func printHeader() {
 	fmt.Println("mouseAnalyzer ran on", time.Now())
 	if host, err := os.Hostname(); err == nil {
 		fmt.Println("on ", host)
 	}
 	fmt.Println("\n-------------- parameters --------------")
-	fmt.Println("number of pulses       : ", numPulses)
-	fmt.Println("ISI                    : ", isiValue)
+	fmt.Println("number of pulses       :", numPulses)
+	if numPulses > 1 {
+		fmt.Println("ISI                    :", isiValue)
+	}
 	if energyModel {
 		fmt.Println("model                  : energy model")
-		fmt.Println("syt energy             : ", sytEnergy)
-		fmt.Println("y energy               : ", yEnergy)
+		fmt.Println("syt energy             :", sytEnergy)
+		fmt.Println("y energy               :", yEnergy)
 	} else {
 		fmt.Println("model                  : deterministic model")
-		fmt.Println("number of active sites : ", numActiveSites)
+		fmt.Println("number of active sites :", numActiveSites)
 	}
-	fmt.Println("------------- data --------------------\n")
+	fmt.Println("-------------- data --------------------\n")
+}
+
+// printReleases prints a summary statistic for all released vesicle for a
+// given seed
+func printReleases(data *libmbd.MCellData, seed int, rel []*ReleaseEvent) {
 	timeStep := data.StepSize()
 	for _, r := range rel {
 
@@ -177,6 +185,7 @@ func main() {
 		log.Fatal("Analysis multi-pulse data requires a non-zero ISI value.")
 	}
 
+	printHeader()
 	// loop over all provided data sets
 	for _, fileName := range flag.Args() {
 
