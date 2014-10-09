@@ -69,33 +69,69 @@ func printReleases(data *libmbd.MCellData, seed int, rel []*ReleaseEvent) {
 	timeStep := data.StepSize()
 	for _, r := range rel {
 
-		/*
-			caContrib, err := determineCaContrib(data, rel)
-			if err != nil {
-				log.Fatal(err)
-			}
-		*/
+		channels, err := determineCaChanContrib(data, r)
+		if err != nil {
+			log.Fatal(err)
+		}
+
 		fmt.Printf("seed : %d   AZ : %d   ves : %d   time : %e", seed, r.azId+1,
 			r.vesicleID+1, float64(r.eventIter)*timeStep)
 		fmt.Printf("  sensors: [")
 		for _, s := range r.sensors {
 			fmt.Printf("%d ", s)
 		}
-		fmt.Printf("]\n")
+		fmt.Printf("]")
+		fmt.Printf("  channels: [")
+		for n, c := range channels {
+			fmt.Printf("%s : %d  ", n, int(c))
+		}
+		fmt.Printf("]")
+		fmt.Printf("\n")
 	}
 }
 
-/*
 // determineCaContrib determines which Ca channels contributed to the release
 // of a particular vesicle.
 // NOTE: We try to be as agnostic as we can in terms of the particular
 // nomenclature used for naming the channels. However, the expectation is
 // that data files tracking Ca binding to vesicles are named
 // vesicle_<az>_<1|2>_ca_<ca naming>.<seed>.dat
-func determineCaContrib(data *libmbd.MCellData, rel *ReleaseEvent) (map[string]int, error) {
+func determineCaChanContrib(data *libmbd.MCellData, rel *ReleaseEvent) (map[string]float64, error) {
+	channels := make(map[string]float64)
+	// the az/channel counting is 1 based whereas our internal counting is 0 based
+	regexString := fmt.Sprintf("vesicle_%d_%d_ca_.*", rel.azId+1, rel.vesicleID+1)
+	counts, err := data.BlockDataByRegex(regexString)
+	if err != nil {
+		return nil, err
+	}
+	for k, c := range counts {
+		if len(c.Col) != 1 {
+			return nil, fmt.Errorf("data set %s has more than the expected 1 column",
+				k)
+		}
+		if c.Col[0][rel.eventIter] > 0 {
+			// need to subtract 2 from regexString due to the extra ".*"
+			caString, err := extractCaChanName(k, len(regexString)-2)
+			if err != nil {
+				return nil, err
+			}
+			channels[caString] = c.Col[0][rel.eventIter]
+		}
+	}
 
+	return channels, nil
 }
-*/
+
+// extractCaChanName attempts to extract the name of the calcium channel based
+// on the expected data name pattern vesicle_<az>_<1|2>_ca_<ca naming>.<seed>.dat
+func extractCaChanName(name string, prefixLength int) (string, error) {
+	caName := name[prefixLength:]
+	items := strings.Split(caName, ".")
+	if len(items) == 0 {
+		return "", fmt.Errorf("Could not determine Ca channel name from data set %s", name)
+	}
+	return items[0], nil
+}
 
 // main entry point
 func main() {
