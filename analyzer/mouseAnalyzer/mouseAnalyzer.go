@@ -10,6 +10,7 @@ import (
 	"log"
 	"math"
 	"os"
+	"runtime"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -23,7 +24,8 @@ var (
 	yEnergy        int     // energy of activated Y sites toward vesicle fusion
 	numActiveSites int     // number of simultaneously active sites required for release
 	isiValue       float64 // interstimulus interval
-
+	numThreads     int     // number of simultaneous threads - each thread works
+	// on a single binary mcell data output file
 )
 
 func init() {
@@ -38,6 +40,8 @@ func init() {
 		"for deterministic model")
 	flag.Float64Var(&isiValue, "i", -1.0, "pulse duration in [s] for analysis multi "+
 		"pulse data")
+	flag.IntVar(&numThreads, "T", 1, "number of threads. Each thread works on a "+
+		"single binary output file\n\tso memory requirements multiply")
 }
 
 // usage prints a brief usage information to stdout
@@ -127,11 +131,12 @@ func printReleases(data *libmbd.MCellData, seed int, rel []*ReleaseEvent) {
 // NOTE: We try to be as agnostic as we can in terms of the particular
 // nomenclature used for naming the channels. However, the expectation is
 // that data files tracking Ca binding to vesicles are named
-// vesicle_<az>_<1|2>_ca_<ca naming>.<seed>.dat
+// vesicle_<az>_<1|2>_ca_<ca naming>.<seed>.dat for syt, and
+// vesicle_Y_<az>_<1|2>_ca_<ca naming>.<seed>.dat for Y.
 func determineCaChanContrib(data *libmbd.MCellData, rel *ReleaseEvent) (map[string]float64, error) {
 	channels := make(map[string]float64)
 	// the az/channel counting is 1 based whereas our internal counting is 0 based
-	regexString := fmt.Sprintf("vesicle_%d_%d_ca_.*", rel.azId+1, rel.vesicleID+1)
+	regexString := fmt.Sprintf("vesicle(_Y)?_%d_%d_ca_.*", rel.azId+1, rel.vesicleID+1)
 	counts, err := data.BlockDataByRegex(regexString)
 	if err != nil {
 		return nil, err
@@ -143,7 +148,11 @@ func determineCaChanContrib(data *libmbd.MCellData, rel *ReleaseEvent) (map[stri
 		}
 		if c.Col[0][rel.eventIter] > 0 {
 			// need to subtract 2 from regexString due to the extra ".*"
-			caString, err := extractCaChanName(k, len(regexString)-2)
+			subs := strings.SplitAfter(k, "ca_")
+			if len(subs) < 2 {
+				return nil, fmt.Errorf("could not determined Ca channel name")
+			}
+			caString, err := extractCaChanName(subs[1])
 			if err != nil {
 				return nil, err
 			}
@@ -155,14 +164,55 @@ func determineCaChanContrib(data *libmbd.MCellData, rel *ReleaseEvent) (map[stri
 }
 
 // extractCaChanName attempts to extract the name of the calcium channel based
-// on the expected data name pattern vesicle_<az>_<1|2>_ca_<ca naming>.<seed>.dat
-func extractCaChanName(name string, prefixLength int) (string, error) {
-	caName := name[prefixLength:]
-	items := strings.Split(caName, ".")
+// on the expected data name pattern <ca naming>.<seed>.dat
+func extractCaChanName(name string) (string, error) {
+	items := strings.Split(name, ".")
 	if len(items) == 0 {
 		return "", fmt.Errorf("Could not determine Ca channel name from data set %s", name)
 	}
 	return items[0], nil
+}
+
+// createAnalysisJobs fills a channel with binary data filenames to be analyzed
+func createAnalysisJobs(fileNames []string, analysisJobs chan<- string) {
+	for _, n := range fileNames {
+		analysisJobs <- n
+	}
+	close(analysisJobs)
+}
+
+func runJob(analysisJobs <-chan string, done chan<- struct{}) {
+
+	for fileName := range analysisJobs {
+		fmt.Println(fileName)
+		seed, err := extractSeed(fileName)
+		if err != nil {
+			fmt.Println(err)
+			done <- struct{}{}
+			return
+		}
+
+		data, err := libmbd.Read(fileName)
+		if err != nil {
+			//log.Fatal(err)
+			fmt.Println(err)
+			done <- struct{}{}
+		}
+
+		err = analyze(data, energyModel, seed, numPulses, numActiveSites, sytEnergy,
+			yEnergy)
+		if err != nil {
+			//log.Fatal(err)
+			fmt.Println(err)
+			done <- struct{}{}
+		}
+		// NOTE: This is a bit of a hack but since we're dealing with potentially
+		// large data sets we need to make sure to free memory before we start
+		// working on the next one
+		debug.FreeOSMemory()
+
+		done <- struct{}{}
+	}
 }
 
 // main entry point
@@ -186,28 +236,18 @@ func main() {
 		log.Fatal("Analysis multi-pulse data requires a non-zero ISI value.")
 	}
 
+	// request proper number of go routines
+	runtime.GOMAXPROCS(numThreads)
+
 	printHeader()
-	// loop over all provided data sets
-	for _, fileName := range flag.Args() {
+	analysisJobs := make(chan string)
+	go createAnalysisJobs(flag.Args(), analysisJobs)
 
-		seed, err := extractSeed(fileName)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		data, err := libmbd.Read(fileName)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		err = analyze(data, energyModel, seed, numPulses, numActiveSites, sytEnergy,
-			yEnergy)
-		if err != nil {
-			log.Fatal(err)
-		}
-		// NOTE: This is a bit of a hack but since we're dealing with potentially
-		// large data sets we need to make sure to free memory before we start
-		// working on the next one
-		debug.FreeOSMemory()
+	done := make(chan struct{})
+	for i := 0; i < numThreads; i++ {
+		go runJob(analysisJobs, done)
+	}
+	for i := 0; i < len(flag.Args()); i++ {
+		<-done
 	}
 }
