@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/haskelladdict/mbdr/libmbd"
 	"log"
@@ -107,14 +108,14 @@ func init() {
 // analyze is the main entry point for analyzing the mouse AZ model. It
 // determines release events and collects statistics
 func analyze(data *libmbd.MCellData, energyModel bool, seed, numPulses,
-	numActiveSites, sytEnergy, yEnergy int) error {
+	numActiveSites, sytEnergy, yEnergy int) ([]string, error) {
 
 	var releases []*ReleaseEvent
 	for az := 0; az < numAZ; az++ {
 		for ves := 0; ves < numVesicles; ves++ {
 			evts, err := extractActivationEvents(data, numPulses, seed, az, ves)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			if evts == nil {
 				continue
@@ -123,7 +124,7 @@ func analyze(data *libmbd.MCellData, energyModel bool, seed, numPulses,
 			rel, err := extractReleaseEvents(evts, data.BlockSize(), energyModel,
 				numActiveSites, sytEnergy, yEnergy, az, ves)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			if rel != nil {
 				releases = append(releases, rel)
@@ -131,8 +132,39 @@ func analyze(data *libmbd.MCellData, energyModel bool, seed, numPulses,
 		}
 	}
 
-	printReleases(data, seed, releases)
-	return nil
+	return assembleReleaseMsgs(data, seed, releases), nil
+}
+
+// assembleReleaseMsgs creates a slice of strings with summary statistics for all
+// released vesicles for a given seed
+func assembleReleaseMsgs(data *libmbd.MCellData, seed int, rel []*ReleaseEvent) []string {
+	messages := make([]string, 0)
+	timeStep := data.StepSize()
+	for _, r := range rel {
+		buffer := bytes.NewBufferString("")
+		channels, err := determineCaChanContrib(data, r)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		eventTime := float64(r.eventIter) * timeStep
+		pulseID := int(math.Floor(eventTime/isiValue)) + 1
+
+		fmt.Fprintf(buffer, "seed : %d   AZ : %d   ves : %d   time : %e   pulseID : %d", seed,
+			r.azId+1, r.vesicleID+1, eventTime, pulseID)
+		fmt.Fprintf(buffer, "  sensors: [")
+		for _, s := range r.sensors {
+			fmt.Fprintf(buffer, "%d ", s)
+		}
+		fmt.Fprintf(buffer, "]")
+		fmt.Fprintf(buffer, "  channels: [")
+		for n, c := range channels {
+			fmt.Fprintf(buffer, "%s : %d  ", n, int(c))
+		}
+		fmt.Fprintf(buffer, "]")
+		messages = append(messages, buffer.String())
+	}
+	return messages
 }
 
 // extractActivationEvents returns a slice with actvation and deactivation events

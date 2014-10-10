@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"github.com/haskelladdict/mbdr/libmbd"
 	"log"
-	"math"
 	"os"
 	"runtime"
 	"runtime/debug"
@@ -96,36 +95,6 @@ func printHeader() {
 	fmt.Println("-------------- data --------------------\n")
 }
 
-// printReleases prints a summary statistic for all released vesicle for a
-// given seed
-func printReleases(data *libmbd.MCellData, seed int, rel []*ReleaseEvent) {
-	timeStep := data.StepSize()
-	for _, r := range rel {
-
-		channels, err := determineCaChanContrib(data, r)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		eventTime := float64(r.eventIter) * timeStep
-		pulseID := int(math.Floor(eventTime/isiValue)) + 1
-
-		fmt.Printf("seed : %d   AZ : %d   ves : %d   time : %e   pulseID : %d", seed,
-			r.azId+1, r.vesicleID+1, eventTime, pulseID)
-		fmt.Printf("  sensors: [")
-		for _, s := range r.sensors {
-			fmt.Printf("%d ", s)
-		}
-		fmt.Printf("]")
-		fmt.Printf("  channels: [")
-		for n, c := range channels {
-			fmt.Printf("%s : %d  ", n, int(c))
-		}
-		fmt.Printf("]")
-		fmt.Printf("\n")
-	}
-}
-
 // determineCaContrib determines which Ca channels contributed to the release
 // of a particular vesicle.
 // NOTE: We try to be as agnostic as we can in terms of the particular
@@ -181,37 +150,35 @@ func createAnalysisJobs(fileNames []string, analysisJobs chan<- string) {
 	close(analysisJobs)
 }
 
-func runJob(analysisJobs <-chan string, done chan<- struct{}) {
+func runJob(analysisJobs <-chan string, done chan<- []string) {
 
 	for fileName := range analysisJobs {
 		fmt.Println(fileName)
 		seed, err := extractSeed(fileName)
 		if err != nil {
 			fmt.Println(err)
-			done <- struct{}{}
+			done <- nil
 			return
 		}
 
 		data, err := libmbd.Read(fileName)
 		if err != nil {
-			//log.Fatal(err)
 			fmt.Println(err)
-			done <- struct{}{}
+			done <- nil
 		}
 
-		err = analyze(data, energyModel, seed, numPulses, numActiveSites, sytEnergy,
-			yEnergy)
+		releaseMsgs, err := analyze(data, energyModel, seed, numPulses, numActiveSites,
+			sytEnergy, yEnergy)
 		if err != nil {
-			//log.Fatal(err)
 			fmt.Println(err)
-			done <- struct{}{}
+			done <- nil
 		}
 		// NOTE: This is a bit of a hack but since we're dealing with potentially
 		// large data sets we need to make sure to free memory before we start
 		// working on the next one
 		debug.FreeOSMemory()
 
-		done <- struct{}{}
+		done <- releaseMsgs
 	}
 }
 
@@ -243,11 +210,14 @@ func main() {
 	analysisJobs := make(chan string)
 	go createAnalysisJobs(flag.Args(), analysisJobs)
 
-	done := make(chan struct{})
+	done := make(chan []string)
 	for i := 0; i < numThreads; i++ {
 		go runJob(analysisJobs, done)
 	}
 	for i := 0; i < len(flag.Args()); i++ {
-		<-done
+		msgs := <-done
+		for _, m := range msgs {
+			fmt.Println(m)
+		}
 	}
 }
