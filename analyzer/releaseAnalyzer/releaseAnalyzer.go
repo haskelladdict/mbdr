@@ -152,7 +152,6 @@ func createAnalysisJobs(fileNames []string, analysisJobs chan<- string) {
 func runJob(analysisJobs <-chan string, vesicleIDs []string, done chan<- []string) {
 
 	for fileName := range analysisJobs {
-		fmt.Println(fileName)
 		seed, err := extractSeed(fileName)
 		if err != nil {
 			fmt.Println(err)

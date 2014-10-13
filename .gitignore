@@ -9,6 +9,7 @@
 tags
 mbdr
 mouseAnalyzer
+frogAnalyzer
 Makefile
 *.swp
 *.DS_Store
