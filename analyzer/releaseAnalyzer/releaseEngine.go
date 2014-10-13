@@ -1,4 +1,4 @@
-package main
+package releaseAnalyzer
 
 import (
 	"bytes"
@@ -12,15 +12,10 @@ import (
 )
 
 const (
-	numAZ       = 6  // number of active zones (AZ) in the model
-	numVesicles = 2  // number of vesicles per AZ
-	numSyt      = 8  // number of synaptotagmin molecules (with 5 Ca2+ sites each)
-	numY        = 16 // number of second sensor (Y) sites
-)
-
-const (
-	numActiveSyt        = 2 // how many Ca2+ sites need to be bound for sensors
-	numActiveY          = 1 // to become active
+	numSyt              = 8  // number of synaptotagmin molecules (with 5 Ca2+ sites each)
+	numY                = 16 // number of second sensor (Y) sites
+	numActiveSyt        = 2  // how many Ca2+ sites need to be bound for sensors
+	numActiveY          = 1  // to become active
 	vesicleFusionEnergy = 40
 )
 
@@ -38,11 +33,10 @@ type caSensor struct {
 
 // ActEvent keeps track of a single activation/deactivation event
 type ActEvent struct {
-	sensorID  int  // sensor which was activated/deactivated
-	azId      int  // id of vesicle and active zone where activation
-	vesicleID int  // event took place
-	eventIter int  // iteration when event occured
-	activated bool // activated is set to true and deactivated otherwise
+	sensorID  int    // sensor which was activated/deactivated
+	vesicleID string // vesicleID were activation event took place
+	eventIter int    // iteration when event occured
+	activated bool   // activated is set to true and deactivated otherwise
 }
 
 // sort infrastructure for sorting ActEvents according to the event time
@@ -63,9 +57,8 @@ func (e byIter) Less(i, j int) bool {
 // ReleaseEvent keeps track of vesicle release events
 type ReleaseEvent struct {
 	sensors   []int  // list of sensors involved in release event
-	azId      int    // id of vesicle and active zone where activation
-	vesicleID int    // event took place
-	eventIter uint64 // iteration when event occured
+	vesicleID string // id of vesicle which was released
+	eventIter uint64 // iteration when event occurred
 }
 
 var caSensors []caSensor
@@ -107,28 +100,26 @@ func init() {
 
 // analyze is the main entry point for analyzing the mouse AZ model. It
 // determines release events and collects statistics
-func analyze(data *libmbd.MCellData, energyModel bool, seed, numPulses,
-	numActiveSites, sytEnergy, yEnergy int) ([]string, error) {
+func analyze(data *libmbd.MCellData, vesicleIDs []string, energyModel bool, seed,
+	numPulses, numActiveSites, sytEnergy, yEnergy int) ([]string, error) {
 
 	var releases []*ReleaseEvent
-	for az := 0; az < numAZ; az++ {
-		for ves := 0; ves < numVesicles; ves++ {
-			evts, err := extractActivationEvents(data, numPulses, seed, az, ves)
-			if err != nil {
-				return nil, err
-			}
-			if evts == nil {
-				continue
-			}
+	for _, vesID := range vesicleIDs {
+		evts, err := extractActivationEvents(data, numPulses, seed, vesID)
+		if err != nil {
+			return nil, err
+		}
+		if evts == nil {
+			continue
+		}
 
-			rel, err := extractReleaseEvents(evts, data.BlockSize(), energyModel,
-				numActiveSites, sytEnergy, yEnergy, az, ves)
-			if err != nil {
-				return nil, err
-			}
-			if rel != nil {
-				releases = append(releases, rel)
-			}
+		rel, err := extractReleaseEvents(evts, data.BlockSize(), energyModel,
+			numActiveSites, sytEnergy, yEnergy, vesID)
+		if err != nil {
+			return nil, err
+		}
+		if rel != nil {
+			releases = append(releases, rel)
 		}
 	}
 
@@ -150,8 +141,8 @@ func assembleReleaseMsgs(data *libmbd.MCellData, seed int, rel []*ReleaseEvent) 
 		eventTime := float64(r.eventIter) * timeStep
 		pulseID := int(math.Floor(eventTime/isiValue)) + 1
 
-		fmt.Fprintf(buffer, "seed : %d   AZ : %d   ves : %d   time : %e   pulseID : %d", seed,
-			r.azId+1, r.vesicleID+1, eventTime, pulseID)
+		fmt.Fprintf(buffer, "seed : %d   vesicleID : %s   time : %e   pulseID : %d", seed,
+			r.vesicleID, eventTime, pulseID)
 		fmt.Fprintf(buffer, "  sensors: [")
 		for _, s := range r.sensors {
 			fmt.Fprintf(buffer, "%d ", s)
@@ -169,8 +160,8 @@ func assembleReleaseMsgs(data *libmbd.MCellData, seed int, rel []*ReleaseEvent) 
 
 // extractActivationEvents returns a slice with actvation and deactivation events
 // for the given vesicle and active zone
-func extractActivationEvents(data *libmbd.MCellData, numPulses, seed, az,
-	ves int) ([]ActEvent, error) {
+func extractActivationEvents(data *libmbd.MCellData, numPulses, seed int,
+	vesicleID string) ([]ActEvent, error) {
 
 	var events []ActEvent
 	// analyze the activation/deactivation status of each ca sensor.
@@ -187,8 +178,8 @@ func extractActivationEvents(data *libmbd.MCellData, numPulses, seed, az,
 		sensorData := make([]int, data.BlockSize())
 		for _, s := range sensor.sites {
 			for p := 0; p < numPulses; p++ {
-				dataName := fmt.Sprintf("bound_vesicle_%d_%d_%s_%d_%d.%04d.dat", az+1,
-					ves+1, sensorString, s, p+1, seed)
+				dataName := fmt.Sprintf("bound_vesicle_%s_%s_%d_%d.%04d.dat", vesicleID,
+					sensorString, s, p+1, seed)
 				bd, err := data.BlockDataByName(dataName)
 				if err != nil {
 					return nil, err
@@ -209,10 +200,10 @@ func extractActivationEvents(data *libmbd.MCellData, numPulses, seed, az,
 		for i, b := range sensorData {
 			if !active && b >= actThresh {
 				active = true
-				events = append(events, ActEvent{id, az, ves, i, active})
+				events = append(events, ActEvent{id, vesicleID, i, active})
 			} else if active && b < actThresh {
 				active = false
-				events = append(events, ActEvent{id, az, ves, i, active})
+				events = append(events, ActEvent{id, vesicleID, i, active})
 			}
 		}
 	}
@@ -222,7 +213,7 @@ func extractActivationEvents(data *libmbd.MCellData, numPulses, seed, az,
 // extractReleaseEvents determines if the given vesicle was released given
 // a list of sensor activation events. If no release took place returns nil.
 func extractReleaseEvents(evts []ActEvent, maxIter uint64, energyModel bool,
-	numActiveSites, sytEnergy, yEnergy, az, ves int) (*ReleaseEvent, error) {
+	numActiveSites, sytEnergy, yEnergy int, vesicleID string) (*ReleaseEvent, error) {
 
 	sort.Sort(byIter(evts))
 	activeEvts := make(map[int]struct{})
@@ -251,10 +242,10 @@ func extractReleaseEvents(evts []ActEvent, maxIter uint64, energyModel bool,
 			// use the energy model to determine release
 			energy := getEnergy(activeEvts, sytEnergy, yEnergy)
 			nextIter := getNextIter(i, maxIter, evts)
-			rel, relError = checkForEnergyRelease(energy, az, ves, e, activeEvts, nextIter)
+			rel, relError = checkForEnergyRelease(energy, vesicleID, e, activeEvts, nextIter)
 		} else {
 			// use the deterministic model to determine release
-			rel, relError = checkForDeterministicRelease(az, ves, numActiveSites, e, activeEvts)
+			rel, relError = checkForDeterministicRelease(vesicleID, numActiveSites, e, activeEvts)
 		}
 		if relError != nil {
 			return nil, relError
@@ -293,14 +284,14 @@ func getNextIter(iter int, maxIter uint64, evts []ActEvent) uint64 {
 // checkForDeterministicRelease tests if vesicles are released according
 // to a deterministic critertion, i.e. as soon as numActiveSites syt or
 // Y sites are active
-func checkForDeterministicRelease(az, ves, numActiveSites int, evt ActEvent,
+func checkForDeterministicRelease(vesID string, numActiveSites int, evt ActEvent,
 	activeEvts map[int]struct{}) (*ReleaseEvent, error) {
 	if len(activeEvts) == numActiveSites {
 		var sensors []int
 		for a, _ := range activeEvts {
 			sensors = append(sensors, a)
 		}
-		return &ReleaseEvent{sensors: sensors, azId: az, vesicleID: ves,
+		return &ReleaseEvent{sensors: sensors, vesicleID: vesID,
 			eventIter: uint64(evt.eventIter)}, nil
 	}
 	return nil, nil
@@ -311,7 +302,7 @@ func checkForDeterministicRelease(az, ves, numActiveSites int, evt ActEvent,
 // energy until next event or the end of simulation. To do this we basically
 // test for each iteration between now and the next event if a release takes
 // place using the Metrolpolis-Hasting algorithm
-func checkForEnergyRelease(energy, az, ves int, evt ActEvent,
+func checkForEnergyRelease(energy int, vesID string, evt ActEvent,
 	activeEvts map[int]struct{}, nextIter uint64) (*ReleaseEvent, error) {
 
 	numIters := nextIter - uint64(evt.eventIter)
@@ -323,7 +314,7 @@ func checkForEnergyRelease(energy, az, ves int, evt ActEvent,
 		for a, _ := range activeEvts {
 			sensors = append(sensors, a)
 		}
-		return &ReleaseEvent{sensors: sensors, azId: az, vesicleID: ves,
+		return &ReleaseEvent{sensors: sensors, vesicleID: vesID,
 			eventIter: uint64(evt.eventIter) + iter}, nil
 	}
 	return nil, nil
