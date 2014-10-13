@@ -11,7 +11,10 @@ import (
 var vesicleIDs = []string{"1_1", "1_2", "2_1", "2_2", "3_1", "3_2", "4_1", "5_1",
 	"5_2", "6_1", "6_2"}
 
+// template string for vesicle binding
+const template = "bound_vesicle_%s_%s_%d_%d.%04d.dat"
+
 // main entry point
 func main() {
-	releaseAnalyzer.Run(vesicleIDs)
+	releaseAnalyzer.Run(&releaseAnalyzer.ReleaseModel{vesicleIDs, template})
 }

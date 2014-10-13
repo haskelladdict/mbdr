@@ -100,12 +100,13 @@ func init() {
 
 // analyze is the main entry point for analyzing the mouse AZ model. It
 // determines release events and collects statistics
-func analyze(data *libmbd.MCellData, vesicleIDs []string, energyModel bool, seed,
+func analyze(data *libmbd.MCellData, model *ReleaseModel, energyModel bool, seed,
 	numPulses, numActiveSites, sytEnergy, yEnergy int) ([]string, error) {
 
 	var releases []*ReleaseEvent
-	for _, vesID := range vesicleIDs {
-		evts, err := extractActivationEvents(data, numPulses, seed, vesID)
+	for _, vesID := range model.VesicleIDs {
+		evts, err := extractActivationEvents(data, numPulses, seed, vesID,
+			model.SensorTemplateString)
 		if err != nil {
 			return nil, err
 		}
@@ -161,7 +162,7 @@ func assembleReleaseMsgs(data *libmbd.MCellData, seed int, rel []*ReleaseEvent) 
 // extractActivationEvents returns a slice with actvation and deactivation events
 // for the given vesicle and active zone
 func extractActivationEvents(data *libmbd.MCellData, numPulses, seed int,
-	vesicleID string) ([]ActEvent, error) {
+	vesicleID, template string) ([]ActEvent, error) {
 
 	var events []ActEvent
 	// analyze the activation/deactivation status of each ca sensor.
@@ -178,8 +179,7 @@ func extractActivationEvents(data *libmbd.MCellData, numPulses, seed int,
 		sensorData := make([]int, data.BlockSize())
 		for _, s := range sensor.sites {
 			for p := 0; p < numPulses; p++ {
-				dataName := fmt.Sprintf("bound_vesicle_%s_%s_%d_%d.%04d.dat", vesicleID,
-					sensorString, s, p+1, seed)
+				dataName := fmt.Sprintf(template, vesicleID, sensorString, s, p+1, seed)
 				bd, err := data.BlockDataByName(dataName)
 				if err != nil {
 					return nil, err

@@ -16,6 +16,11 @@ import (
 	"time"
 )
 
+type ReleaseModel struct {
+	VesicleIDs           []string
+	SensorTemplateString string
+}
+
 var (
 	numPulses      int     // number of AP pulses
 	energyModel    bool    // use the energy model
@@ -149,7 +154,7 @@ func createAnalysisJobs(fileNames []string, analysisJobs chan<- string) {
 	close(analysisJobs)
 }
 
-func runJob(analysisJobs <-chan string, vesicleIDs []string, done chan<- []string) {
+func runJob(analysisJobs <-chan string, done chan<- []string, model *ReleaseModel) {
 
 	for fileName := range analysisJobs {
 		seed, err := extractSeed(fileName)
@@ -165,7 +170,7 @@ func runJob(analysisJobs <-chan string, vesicleIDs []string, done chan<- []strin
 			done <- nil
 		}
 
-		releaseMsgs, err := analyze(data, vesicleIDs, energyModel, seed, numPulses,
+		releaseMsgs, err := analyze(data, model, energyModel, seed, numPulses,
 			numActiveSites, sytEnergy, yEnergy)
 		if err != nil {
 			fmt.Println(err)
@@ -181,7 +186,7 @@ func runJob(analysisJobs <-chan string, vesicleIDs []string, done chan<- []strin
 }
 
 // main entry point
-func Run(vesicleIDs []string) {
+func Run(model *ReleaseModel) {
 	flag.Parse()
 	if len(flag.Args()) == 0 {
 		usage()
@@ -210,7 +215,7 @@ func Run(vesicleIDs []string) {
 
 	done := make(chan []string)
 	for i := 0; i < numThreads; i++ {
-		go runJob(analysisJobs, vesicleIDs, done)
+		go runJob(analysisJobs, done, model)
 	}
 	for i := 0; i < len(flag.Args()); i++ {
 		msgs := <-done
