@@ -54,7 +54,7 @@ func main() {
 			log.Fatal(err)
 		}
 	} else {
-		fmt.Println("\nError: Please specify at least one of -i, -l, or -e!\n")
+		fmt.Println("\nError: Please specify at least one of -i, -l, or -e!")
 		usage()
 		return
 	}

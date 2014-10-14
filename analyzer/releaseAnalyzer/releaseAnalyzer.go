@@ -74,7 +74,7 @@ func extractSeed(fileName string) (int, error) {
 			return seed, nil
 		}
 	}
-	return -1, fmt.Errorf("Unable to extract seed id from filename ", fileName)
+	return -1, fmt.Errorf("Unable to extract seed id from filename %s", fileName)
 }
 
 // printHeader prints and informative header file with date and commandline
@@ -97,7 +97,8 @@ func printHeader() {
 		fmt.Println("model                  : deterministic model")
 		fmt.Println("number of active sites :", numActiveSites)
 	}
-	fmt.Println("-------------- data --------------------\n")
+	fmt.Println("-------------- data --------------------")
+	fmt.Println("")
 }
 
 // determineCaContrib determines which Ca channels contributed to the release
