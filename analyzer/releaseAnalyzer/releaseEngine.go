@@ -139,6 +139,11 @@ func assembleReleaseMsgs(data *libmbd.MCellData, seed int, rel []*ReleaseEvent) 
 		if err != nil {
 			log.Fatal(err)
 		}
+		if err := checkCaNumbers(channels, r); err != nil {
+			fmt.Printf("In seed %d, vesicle %s, time %f\n", seed, r.vesicleID,
+				float64(r.eventIter)*data.StepSize())
+			log.Fatal(err)
+		}
 
 		eventTime := float64(r.eventIter) * timeStep
 		// figure out if event happened within or between pulses
@@ -346,4 +351,32 @@ func checkForRelease(energy int, numIters uint64) (uint64, bool) {
 		}
 	}
 	return 0, false
+}
+
+// checkCaNumbers does a sanity check to ensure that the number of bound
+// calcium ions is equal or larger than what is expected based on the activated
+// syt and Y sites
+func checkCaNumbers(channels map[string]float64, r *ReleaseEvent) error {
+	var expected int
+	for _, s := range r.sensors {
+		if caSensors[s].siteType == sytSite {
+			expected += 2
+		} else if caSensors[s].siteType == ySite {
+			expected += 1
+		} else {
+			return fmt.Errorf("in checkCaNumbers: Encountered incorrect binding site "+
+				"type %d", caSensors[s].siteType)
+		}
+	}
+
+	var actual int
+	for _, c := range channels {
+		actual += int(c)
+	}
+
+	if actual < expected {
+		return fmt.Errorf("The number of bound Ca ions (%d) is smaller than expected "+
+			"based on the activation status (%d)", actual, expected)
+	}
+	return nil
 }
