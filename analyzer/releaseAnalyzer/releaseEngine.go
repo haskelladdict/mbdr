@@ -17,6 +17,7 @@ const (
 	numActiveSyt        = 2  // how many Ca2+ sites need to be bound for sensors
 	numActiveY          = 1  // to become active
 	vesicleFusionEnergy = 40
+	pulseDuration       = 3e-3 // pulse duration in [s]
 )
 
 // type of binding site (syt or second sensor)
@@ -140,10 +141,17 @@ func assembleReleaseMsgs(data *libmbd.MCellData, seed int, rel []*ReleaseEvent) 
 		}
 
 		eventTime := float64(r.eventIter) * timeStep
-		pulseID := int(math.Floor(eventTime/isiValue)) + 1
+		// figure out if event happened within or between pulses
+		pulseID := int(math.Floor(eventTime / isiValue))
+		var pulseString string
+		if eventTime-float64(pulseID)*isiValue > pulseDuration {
+			pulseString = fmt.Sprintf("ISI_%d", pulseID+1)
+		} else {
+			pulseString = fmt.Sprintf("%d", pulseID+1)
+		}
 
-		fmt.Fprintf(buffer, "seed : %d   vesicleID : %s   time : %e   pulseID : %d", seed,
-			r.vesicleID, eventTime, pulseID)
+		fmt.Fprintf(buffer, "seed : %d   vesicleID : %s   time : %e   pulseID : %s", seed,
+			r.vesicleID, eventTime, pulseString)
 		fmt.Fprintf(buffer, "  sensors: [")
 		for _, s := range r.sensors {
 			fmt.Fprintf(buffer, "%d ", s)
