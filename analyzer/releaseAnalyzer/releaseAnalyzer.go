@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/haskelladdict/mbdr/libmbd"
+	"github.com/haskelladdict/mbdr/parser"
 	"log"
 	"os"
 	"runtime"
@@ -165,7 +166,7 @@ func runJob(analysisJobs <-chan string, done chan<- []string, model *ReleaseMode
 			return
 		}
 
-		data, err := libmbd.Read(fileName)
+		data, err := parser.Read(fileName)
 		if err != nil {
 			fmt.Println(err)
 			done <- nil

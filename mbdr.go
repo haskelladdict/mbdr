@@ -7,9 +7,11 @@ import (
 	"os"
 
 	"github.com/haskelladdict/mbdr/libmbd"
+	"github.com/haskelladdict/mbdr/parser"
 )
 
-const mbdrVersion = 3
+const mbdrMajorVersion = 3
+const mbdrMinorVersion = 0
 
 // command line flags
 var (
@@ -46,11 +48,11 @@ func main() {
 	var data *libmbd.MCellData
 	var err error
 	if infoFlag || listFlag {
-		if data, err = libmbd.ReadHeader(filename); err != nil {
+		if data, err = parser.ReadHeader(filename); err != nil {
 			log.Fatal(err)
 		}
 	} else if extractFlag {
-		if data, err = libmbd.Read(filename); err != nil {
+		if data, err = parser.Read(filename); err != nil {
 			log.Fatal(err)
 		}
 	} else {
@@ -83,18 +85,19 @@ func usage() {
 // showInfo provides general info regarding the nature and amount of data
 // contained in the binary mcell file
 func showInfo(d *libmbd.MCellData) {
-	fmt.Printf("This is mbdr version %d        (C) 2014 M. Dittrich\n", mbdrVersion)
-	fmt.Println("--------------------------------------------------")
-	fmt.Printf("mbdr> found %d datablocks with %d items each\n", d.NumDataBlocks(),
-		d.BlockSize())
-	switch d.OutputType() {
+	fmt.Printf("This is mbdr version %d.%d        (C) 2014 M. Dittrich\n",
+		mbdrMajorVersion, mbdrMinorVersion)
+	fmt.Println("------------------------------------------------------------------")
+	fmt.Printf("mbdr> found %d output data blocks with %d output iterations each\n",
+		d.NumDataBlocks(), d.BlockLen())
+	switch d.DataType() {
 	case libmbd.Step:
-		fmt.Printf("mbdr> output generated via STEP size of %g s\n", d.StepSize())
+		fmt.Printf("mbdr> output generated via STEP size of %g s\n", d.OutputStepLen())
 
-	case libmbd.TimeList:
+	case libmbd.TimeListType:
 		fmt.Printf("mbdr> output generated via TIME_LIST\n")
 
-	case libmbd.IterationList:
+	case libmbd.IterationListType:
 		fmt.Printf("mbdr> output generated via ITERATION_LIST\n")
 
 	default:
@@ -105,7 +108,7 @@ func showInfo(d *libmbd.MCellData) {
 // showAvailableData shows the available data sets contained in the
 // binary output file
 func showAvailableData(d *libmbd.MCellData) {
-	for i, n := range d.BlockNames() {
+	for i, n := range d.DataNames() {
 		fmt.Printf("[%d] %s\n", i, n)
 	}
 }

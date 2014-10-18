@@ -115,7 +115,7 @@ func analyze(data *libmbd.MCellData, model *ReleaseModel, energyModel bool, seed
 			continue
 		}
 
-		rel, err := extractReleaseEvents(evts, data.BlockSize(), energyModel,
+		rel, err := extractReleaseEvents(evts, data.BlockLen(), energyModel,
 			numActiveSites, sytEnergy, yEnergy, vesID)
 		if err != nil {
 			return nil, err
@@ -132,7 +132,7 @@ func analyze(data *libmbd.MCellData, model *ReleaseModel, energyModel bool, seed
 // released vesicles for a given seed
 func assembleReleaseMsgs(data *libmbd.MCellData, seed int, rel []*ReleaseEvent) []string {
 	messages := make([]string, 0)
-	timeStep := data.StepSize()
+	timeStep := data.OutputStepLen()
 	for _, r := range rel {
 		buffer := bytes.NewBufferString("")
 		channels, err := determineCaChanContrib(data, r)
@@ -141,7 +141,7 @@ func assembleReleaseMsgs(data *libmbd.MCellData, seed int, rel []*ReleaseEvent) 
 		}
 		if err := checkCaNumbers(channels, r); err != nil {
 			fmt.Printf("In seed %d, vesicle %s, time %f\n", seed, r.vesicleID,
-				float64(r.eventIter)*data.StepSize())
+				float64(r.eventIter)*data.OutputStepLen())
 			log.Fatal(err)
 		}
 
@@ -189,7 +189,7 @@ func extractActivationEvents(data *libmbd.MCellData, numPulses, seed int,
 			actThresh = numActiveY
 		}
 
-		sensorData := make([]int, data.BlockSize())
+		sensorData := make([]int, data.BlockLen())
 		for _, s := range sensor.sites {
 			for p := 0; p < numPulses; p++ {
 				dataName := fmt.Sprintf(template, vesicleID, sensorString, s, p+1, seed)
