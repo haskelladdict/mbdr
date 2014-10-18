@@ -9,19 +9,22 @@ import (
 )
 
 // MCellData tracks the data contained in the binary mcell file as well as
-// relevant metadate to retrieve specific data items.
+// relevant metadata to retrieve specific data items.
+// NOTE: Depending on the API version of the binary output data not all fields
+// are defined
 type MCellData struct {
 	Buffer        util.ReadBuf
+	API           int
 	OutputType    uint16
 	BlockSize     uint64
 	StepSize      float64
 	TimeList      []float64
-	OutputBufSize uint64
-	TotalNumCols  uint64
+	OutputBufSize uint64 // only for API >= 2
+	TotalNumCols  uint64 // only for API >= 2
 	NumBlocks     uint64
 	BlockNames    []string
 	BlockNameMap  map[string]uint64
-	BlockInfo     []BlockData
+	BlockInfo     []BlockData // only for API >= 2
 }
 
 // CountData is a container holding the data corresponding to a reaction data

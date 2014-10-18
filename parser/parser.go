@@ -4,7 +4,9 @@ package parser
 
 import (
 	"compress/bzip2"
+	"fmt"
 	"github.com/haskelladdict/mbdr/libmbd"
+	"github.com/haskelladdict/mbdr/parser/parseAPI1"
 	"github.com/haskelladdict/mbdr/parser/parseAPI2"
 	"io"
 	"os"
@@ -32,7 +34,15 @@ func ReadHeader(filename string) (*libmbd.MCellData, error) {
 
 	data := new(libmbd.MCellData)
 	switch apiTag {
+	case "MCELL_BINARY_API_1":
+		fmt.Println("Detected legacy version")
+		data.API = 1
+		if data, err = parseAPI1.Header(file, data); err != nil {
+			return nil, err
+		}
+		fmt.Println("type ", data.OutputType)
 	case "MCELL_BINARY_API_2":
+		data.API = 2
 		if data, err = parseAPI2.Header(file, data); err != nil {
 			return nil, err
 		}
@@ -62,6 +72,7 @@ func Read(filename string) (*libmbd.MCellData, error) {
 	data := new(libmbd.MCellData)
 	switch apiTag {
 	case "MCELL_BINARY_API_2":
+		data.API = 2
 		if data, err = parseAPI2.Header(file, data); err != nil {
 			return nil, err
 		}

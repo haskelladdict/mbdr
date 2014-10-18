@@ -19,11 +19,17 @@ func (b *ReadBuf) uint16() uint16 {
 	return v
 }
 
+func (b *ReadBuf) uint32() uint32 {
+	v := binary.LittleEndian.Uint32(*b)
+	return v
+}
+
 func (b *ReadBuf) uint64() uint64 {
 	v := binary.LittleEndian.Uint64(*b)
 	return v
 }
 
+// float conversions
 func (b *ReadBuf) float64() float64 {
 	v := math.Float64frombits(binary.LittleEndian.Uint64(*b))
 	return v
@@ -41,6 +47,15 @@ func ReadUint16(r io.Reader) (uint16, error) {
 		return 0, err
 	}
 	return buf.uint16(), nil
+}
+
+// readUint32 reads an uint32 from a io.Reader
+func ReadUint32(r io.Reader) (uint32, error) {
+	buf := make(ReadBuf, 4)
+	if _, err := io.ReadFull(r, buf); err != nil {
+		return 0, err
+	}
+	return buf.uint32(), nil
 }
 
 // readUint64 reads an uint64 from an io.Reader
