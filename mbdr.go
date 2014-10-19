@@ -91,7 +91,7 @@ func showInfo(d *libmbd.MCellData) {
 	fmt.Printf("mbdr> output was generated using %s\n", d.API)
 	fmt.Printf("mbdr> found %d output data blocks with %d output iterations each\n",
 		d.NumDataBlocks(), d.BlockLen())
-	switch d.DataType() {
+	switch d.OutputType() {
 	case libmbd.Step:
 		fmt.Printf("mbdr> output generated via STEP size of %g s\n", d.OutputStepLen())
 

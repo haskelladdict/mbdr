@@ -24,15 +24,15 @@ const API2 = "MCELL_BINARY_API_2"
 // NOTE: Depending on the API version of the binary output data not all fields
 // are defined
 type MCellData struct {
-	Buffer       util.ReadBuf
-	OutputType   uint16
-	BlockSize    uint64
-	StepSize     float64
-	TimeList     []float64
-	NumBlocks    uint64
-	BlockNames   []string
-	BlockNameMap map[string]uint64
-	API          string
+	Buffer         util.ReadBuf
+	OutputListType uint16
+	BlockSize      uint64
+	StepSize       float64
+	TimeList       []float64
+	NumBlocks      uint64
+	BlockNames     []string
+	BlockNameMap   map[string]uint64
+	API            string
 	API1Data
 	API2Data
 }
@@ -44,20 +44,20 @@ type API1Data struct {
 	BlockEntries []BlockEntry
 }
 
-// API1Data are data items specific to API version 1 of the mcell binary output
-// format.
-type API2Data struct {
-	OutputBufSize uint64
-	TotalNumCols  uint64
-	BlockInfo     []BlockData
-}
-
 // BlockEntry is used for API version 1. It stores the beginning and end of
 // each data block within the data buffer.
 type BlockEntry struct {
 	Type  byte
 	Start uint64
 	End   uint64
+}
+
+// API1Data are data items specific to API version 1 of the mcell binary output
+// format.
+type API2Data struct {
+	OutputBufSize uint64
+	TotalNumCols  uint64
+	BlockInfo     []BlockData
 }
 
 // BlockData is used for API version 2. It stores metadata for a given data block
@@ -101,13 +101,13 @@ func (d *MCellData) BlockLen() uint64 {
 	return d.BlockSize
 }
 
-// DateType returns the output type (STEP, ITERATION_LIST/TIME_LIST)
-func (d *MCellData) DataType() uint16 {
-	return d.OutputType
+// OutputType returns the output type (STEP, ITERATION_LIST/TIME_LIST)
+func (d *MCellData) OutputType() uint16 {
+	return d.OutputListType
 }
 
 // OutputStepLen returns the output step length. NOTE: The returns value is only
-// meaningful is outputType == Step, otherwise this function returns 0
+// meaningful is OutputListType == Step, otherwise this function returns 0
 func (d *MCellData) OutputStepLen() float64 {
 	return d.StepSize
 }
@@ -116,7 +116,7 @@ func (d *MCellData) OutputStepLen() float64 {
 // column data (either computed from STEP or via ITERATION_LIST/TIME_LIST)
 // NOTE: In the case of STEP we cache the timelist after the first request
 func (d *MCellData) OutputTimes() []float64 {
-	if d.DataType() == Step && len(d.TimeList) == 0 {
+	if d.OutputType() == Step && len(d.TimeList) == 0 {
 		d.TimeList = make([]float64, d.BlockLen())
 		for i := uint64(0); i < d.BlockLen(); i++ {
 			d.TimeList[i] = d.OutputStepLen() * float64(i)
@@ -162,10 +162,71 @@ func (d *MCellData) BlockDataByName(name string) (*CountData, error) {
 
 // BlockDataByID returns the data stored in the data block of the given ID
 // as a CountData struct
+// NOTE: This is the only method of MCellData which is API sensitive
 func (d *MCellData) BlockDataByID(id uint64) (*CountData, error) {
 	if id < 0 || id >= d.NumBlocks {
 		return nil, fmt.Errorf("supplied data ID %d is out of range", id)
 	}
+
+	var c *CountData
+	var e error
+	switch d.API {
+	case API1:
+		c, e = d.blockDataAPI1(id)
+	case API2:
+		c, e = d.blockDataAPI2(id)
+	default:
+		c = nil
+		e = fmt.Errorf("unknown API type %s in BlockDataByID\n", d.API)
+	}
+	return c, e
+}
+
+// blockDataAPI1 returns count data for mcell binary API version 2. It returns
+// the data stored in the data block of the given ID as a CountData struct
+func (d *MCellData) blockDataAPI1(id uint64) (*CountData, error) {
+
+	entry := d.BlockEntries[id]
+	output := &CountData{}
+	output.Col = make([][]float64, 1)
+	output.Col[0] = make([]float64, 0, d.BlockSize)
+	output.DataTypes = append(output.DataTypes, uint16(entry.Type))
+
+	loc := entry.Start - d.Offset
+	var buf util.ReadBuf
+	switch entry.Type {
+	case 0:
+		var val uint32
+		for i := uint64(0); i < d.BlockSize; i++ {
+			buf = (d.Buffer)[loc:]
+			val = buf.Uint32()
+			output.Col[0] = append(output.Col[0], float64(val))
+			loc += util.LenUint32
+		}
+		// sanity check
+		if loc != entry.End-d.Offset {
+			return nil, fmt.Errorf("did not properly reach end of data block %d\n", id)
+		}
+
+	case 1:
+		var val float64
+		for i := uint64(0); i < d.BlockSize; i++ {
+			buf = (d.Buffer)[loc:]
+			val = buf.Float64()
+			output.Col[0] = append(output.Col[0], val)
+			loc += util.LenFloat64
+		}
+		// sanity check
+		if loc != entry.End-d.Offset {
+			return nil, fmt.Errorf("did not properly reach end of data block %d\n", id)
+		}
+	}
+	return output, nil
+}
+
+// blockDataAPI2 returns count data for mcell binary API version 2. It returns
+// the data stored in the data block of the given ID as a CountData struct
+func (d *MCellData) blockDataAPI2(id uint64) (*CountData, error) {
 
 	entry := d.BlockInfo[id]
 	output := &CountData{}
@@ -177,7 +238,7 @@ func (d *MCellData) BlockDataByID(id uint64) (*CountData, error) {
 
 	row := uint64(0)
 	stream := uint64(1)
-	bufLoc := d.OutputBufSize * util.LenFloat64 * entry.Offset
+	loc := d.OutputBufSize * util.LenFloat64 * entry.Offset
 	// read all rows until we hit the total blockSize
 	for row < d.BlockSize {
 
@@ -189,20 +250,20 @@ func (d *MCellData) BlockDataByID(id uint64) (*CountData, error) {
 				offset = d.BlockSize - row
 			}
 			// forward to beginning of stream block
-			bufLoc = stream * d.OutputBufSize * d.TotalNumCols * util.LenFloat64
+			loc = stream * d.OutputBufSize * d.TotalNumCols * util.LenFloat64
 
 			// forward to location within stream block
-			bufLoc += offset * entry.Offset * util.LenFloat64
+			loc += offset * entry.Offset * util.LenFloat64
 
 			stream++
 		}
 
 		// read current row
 		for i := uint64(0); i < entry.NumCols; i++ {
-			loc := (d.Buffer)[bufLoc:]
-			val := loc.Float64NoSlice() //d.buffer[bufLoc:].float64NoSlice()
+			buf := (d.Buffer)[loc:]
+			val := buf.Float64() //d.buffer[bufLoc:].float64NoSlice()
 			output.Col[i] = append(output.Col[i], val)
-			bufLoc += util.LenFloat64
+			loc += util.LenFloat64
 		}
 		row++
 	}

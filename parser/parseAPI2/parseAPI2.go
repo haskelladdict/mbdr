@@ -53,7 +53,7 @@ func Data(r io.Reader, data *libmbd.MCellData) (*libmbd.MCellData, error) {
 func parseBlockInfo(r io.Reader, data *libmbd.MCellData) error {
 
 	var err error
-	if data.OutputType, err = util.ReadUint16(r); err != nil {
+	if data.OutputListType, err = util.ReadUint16(r); err != nil {
 		return err
 	}
 
@@ -66,7 +66,7 @@ func parseBlockInfo(r io.Reader, data *libmbd.MCellData) error {
 		return err
 	}
 
-	switch data.OutputType {
+	switch data.OutputListType {
 	case libmbd.Step:
 		if data.StepSize, err = util.ReadFloat64(r); err != nil {
 			return err

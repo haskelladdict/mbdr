@@ -60,14 +60,14 @@ func parseBlockInfo(r io.Reader, data *libmbd.MCellData) error {
 		return err
 	}
 	// NOTE: since output type is 0, 1, or 2 this conversion is safe
-	data.OutputType = uint16(outputType) + 1
+	data.OutputListType = uint16(outputType) + 1
 
 	var length uint64
 	if length, err = util.ReadUint64(r); err != nil {
 		return err
 	}
 
-	switch data.OutputType {
+	switch data.OutputListType {
 	case libmbd.Step:
 		if data.StepSize, err = util.ReadFloat64(r); err != nil {
 			return err
