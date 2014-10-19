@@ -189,22 +189,34 @@ func extractActivationEvents(data *libmbd.MCellData, numPulses, seed int,
 			actThresh = numActiveY
 		}
 
-		sensorData := make([]int, data.BlockLen())
+		// NOTE: This could be improved. the templates differ depending on if the
+		// underlying data comes from a single or multi-pulse experiment
+		var dataNames []string
 		for _, s := range sensor.sites {
-			for p := 0; p < numPulses; p++ {
-				dataName := fmt.Sprintf(template, vesicleID, sensorString, s, p+1, seed)
-				bd, err := data.BlockDataByName(dataName)
-				if err != nil {
-					return nil, err
+			if numPulses == 1 {
+				dataNames = append(dataNames, fmt.Sprintf(template, vesicleID, sensorString,
+					s, seed))
+			} else {
+				for p := 0; p < numPulses; p++ {
+					dataNames = append(dataNames, fmt.Sprintf(template, vesicleID, sensorString,
+						s, p+1, seed))
 				}
+			}
+		}
 
-				if len(bd.Col) != 1 {
-					return nil, fmt.Errorf("data set %s had more than one data column",
-						dataName)
-				}
-				for i := 0; i < len(sensorData); i++ {
-					sensorData[i] += int(bd.Col[0][i])
-				}
+		sensorData := make([]int, data.BlockLen())
+		for _, dataName := range dataNames {
+			bd, err := data.BlockDataByName(dataName)
+			if err != nil {
+				return nil, err
+			}
+
+			if len(bd.Col) != 1 {
+				return nil, fmt.Errorf("data set %s had more than one data column",
+					dataName)
+			}
+			for i := 0; i < len(sensorData); i++ {
+				sensorData[i] += int(bd.Col[0][i])
 			}
 		}
 
