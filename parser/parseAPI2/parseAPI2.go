@@ -40,7 +40,7 @@ func Data(r io.Reader, data *libmbd.MCellData) (*libmbd.MCellData, error) {
 	// compute required capacity of buffer
 	// NOTE: we allocate an additional data.blockSize to avoid re-allocation
 	var err error
-	capacity := data.BlockSize*data.TotalNumCols*libmbd.LenDouble + data.BlockSize
+	capacity := data.BlockSize*data.TotalNumCols*util.LenFloat64 + data.BlockSize
 	data.Buffer, err = util.ReadAll(r, int64(capacity))
 	if err != nil {
 		return nil, err

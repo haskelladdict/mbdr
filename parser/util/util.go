@@ -8,6 +8,15 @@ import (
 	"math"
 )
 
+// convenience consts describing the length of certain C types in bytes
+const (
+	LenByte    = 1
+	LenUint16  = 2
+	LenUint32  = 4
+	LenUint64  = 8
+	LenFloat64 = 8
+)
+
 // readBuf and helper function convert between a byte slice and an underlying
 // integer type
 // NOTE: This code was take almost verbatim from archive/zip/reader from the
@@ -40,7 +49,16 @@ func (b *ReadBuf) Float64NoSlice() float64 {
 	return v
 }
 
-// readUint16 reads an uint16 from a io.Reader
+// readByte reads a single byte from an io.Reader
+func ReadByte(r io.Reader) (byte, error) {
+	buf := []byte{0}
+	if _, err := io.ReadFull(r, buf); err != nil {
+		return 0, err
+	}
+	return buf[0], nil
+}
+
+// readUint16 reads an uint16 from an io.Reader
 func ReadUint16(r io.Reader) (uint16, error) {
 	buf := make(ReadBuf, 2)
 	if _, err := io.ReadFull(r, buf); err != nil {
@@ -49,7 +67,7 @@ func ReadUint16(r io.Reader) (uint16, error) {
 	return buf.uint16(), nil
 }
 
-// readUint32 reads an uint32 from a io.Reader
+// readUint32 reads an uint32 from an io.Reader
 func ReadUint32(r io.Reader) (uint32, error) {
 	buf := make(ReadBuf, 4)
 	if _, err := io.ReadFull(r, buf); err != nil {

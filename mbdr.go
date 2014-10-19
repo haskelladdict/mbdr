@@ -88,6 +88,7 @@ func showInfo(d *libmbd.MCellData) {
 	fmt.Printf("This is mbdr version %d.%d        (C) 2014 M. Dittrich\n",
 		mbdrMajorVersion, mbdrMinorVersion)
 	fmt.Println("------------------------------------------------------------------")
+	fmt.Printf("mbdr> output was generated using %s\n", d.API)
 	fmt.Printf("mbdr> found %d output data blocks with %d output iterations each\n",
 		d.NumDataBlocks(), d.BlockLen())
 	switch d.DataType() {

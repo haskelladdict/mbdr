@@ -8,23 +8,67 @@ import (
 	"regexp"
 )
 
+// enumeration describing the output type of the included data
+const (
+	Step uint16 = 1 << iota
+	TimeListType
+	IterationListType
+)
+
+// list of currently know API versions
+const API1 = "MCELL_BINARY_API_1"
+const API2 = "MCELL_BINARY_API_2"
+
 // MCellData tracks the data contained in the binary mcell file as well as
 // relevant metadata to retrieve specific data items.
 // NOTE: Depending on the API version of the binary output data not all fields
 // are defined
 type MCellData struct {
-	Buffer        util.ReadBuf
-	API           int
-	OutputType    uint16
-	BlockSize     uint64
-	StepSize      float64
-	TimeList      []float64
-	OutputBufSize uint64 // only for API >= 2
-	TotalNumCols  uint64 // only for API >= 2
-	NumBlocks     uint64
-	BlockNames    []string
-	BlockNameMap  map[string]uint64
-	BlockInfo     []BlockData // only for API >= 2
+	Buffer       util.ReadBuf
+	OutputType   uint16
+	BlockSize    uint64
+	StepSize     float64
+	TimeList     []float64
+	NumBlocks    uint64
+	BlockNames   []string
+	BlockNameMap map[string]uint64
+	API          string
+	API1Data
+	API2Data
+}
+
+// API1Data are data items specific to API version 1 of the mcell binary output
+// format.
+type API1Data struct {
+	Offset       uint64 // offset into data buffer
+	BlockEntries []BlockEntry
+}
+
+// API1Data are data items specific to API version 1 of the mcell binary output
+// format.
+type API2Data struct {
+	OutputBufSize uint64
+	TotalNumCols  uint64
+	BlockInfo     []BlockData
+}
+
+// BlockEntry is used for API version 1. It stores the beginning and end of
+// each data block within the data buffer.
+type BlockEntry struct {
+	Type  byte
+	Start uint64
+	End   uint64
+}
+
+// BlockData is used for API version 2. It stores metadata for a given data block
+// such as the data name, number of data columns, the type of data
+// stored (int/double), and the internal offset into the buffer at which the
+// data can be found.
+type BlockData struct {
+	Name      string
+	NumCols   uint64
+	DataTypes []uint16
+	Offset    uint64
 }
 
 // CountData is a container holding the data corresponding to a reaction data
@@ -33,30 +77,6 @@ type CountData struct {
 	Col       [][]float64
 	DataTypes []uint16
 }
-
-// BlockData stores metadata related to a given data block such as the
-// data name, number of data columns, the type of data stored (int/double),
-// and the internal offset into the buffer at which the data can be found.
-type BlockData struct {
-	Name      string
-	NumCols   uint64
-	DataTypes []uint16
-	Offset    uint64
-}
-
-// convenience consts describing the length of certain C types in bytes
-const (
-	LenUint16_t = 2
-	LenUint64_t = 8
-	LenDouble   = 8
-)
-
-// enumeration describing the output type of the included data
-const (
-	Step uint16 = 1 << iota
-	TimeListType
-	IterationListType
-)
 
 // DataNames returns the list of available blocknames
 func (d *MCellData) DataNames() []string {
@@ -157,7 +177,7 @@ func (d *MCellData) BlockDataByID(id uint64) (*CountData, error) {
 
 	row := uint64(0)
 	stream := uint64(1)
-	bufLoc := d.OutputBufSize * LenDouble * entry.Offset
+	bufLoc := d.OutputBufSize * util.LenFloat64 * entry.Offset
 	// read all rows until we hit the total blockSize
 	for row < d.BlockSize {
 
@@ -169,10 +189,10 @@ func (d *MCellData) BlockDataByID(id uint64) (*CountData, error) {
 				offset = d.BlockSize - row
 			}
 			// forward to beginning of stream block
-			bufLoc = stream * d.OutputBufSize * d.TotalNumCols * LenDouble
+			bufLoc = stream * d.OutputBufSize * d.TotalNumCols * util.LenFloat64
 
 			// forward to location within stream block
-			bufLoc += offset * entry.Offset * LenDouble
+			bufLoc += offset * entry.Offset * util.LenFloat64
 
 			stream++
 		}
@@ -182,7 +202,7 @@ func (d *MCellData) BlockDataByID(id uint64) (*CountData, error) {
 			loc := (d.Buffer)[bufLoc:]
 			val := loc.Float64NoSlice() //d.buffer[bufLoc:].float64NoSlice()
 			output.Col[i] = append(output.Col[i], val)
-			bufLoc += LenDouble
+			bufLoc += util.LenFloat64
 		}
 		row++
 	}

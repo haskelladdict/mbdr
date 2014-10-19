@@ -33,19 +33,18 @@ func ReadHeader(filename string) (*libmbd.MCellData, error) {
 	}
 
 	data := new(libmbd.MCellData)
+	data.API = apiTag
 	switch apiTag {
-	case "MCELL_BINARY_API_1":
-		fmt.Println("Detected legacy version")
-		data.API = 1
+	case libmbd.API1:
 		if data, err = parseAPI1.Header(file, data); err != nil {
 			return nil, err
 		}
-		fmt.Println("type ", data.OutputType)
-	case "MCELL_BINARY_API_2":
-		data.API = 2
+	case libmbd.API2:
 		if data, err = parseAPI2.Header(file, data); err != nil {
 			return nil, err
 		}
+	default:
+		return nil, fmt.Errorf("unknown mcell binary api version %s", apiTag)
 	}
 
 	return data, nil
@@ -70,15 +69,24 @@ func Read(filename string) (*libmbd.MCellData, error) {
 	}
 
 	data := new(libmbd.MCellData)
+	data.API = apiTag
 	switch apiTag {
-	case "MCELL_BINARY_API_2":
-		data.API = 2
+	case libmbd.API1:
+		if data, err = parseAPI1.Header(file, data); err != nil {
+			return nil, err
+		}
+		if data, err = parseAPI1.Data(file, data); err != nil {
+			return nil, err
+		}
+	case libmbd.API2:
 		if data, err = parseAPI2.Header(file, data); err != nil {
 			return nil, err
 		}
 		if data, err = parseAPI2.Data(file, data); err != nil {
 			return nil, err
 		}
+	default:
+		return nil, fmt.Errorf("unknown mcell binary api version %s", apiTag)
 	}
 	return data, nil
 }
