@@ -1,4 +1,4 @@
-package releaseAnalyzer
+package releaser
 
 import (
 	"bytes"
@@ -8,28 +8,42 @@ import (
 	"math"
 	"math/rand"
 	"sort"
-	"time"
-)
-
-const (
-	numSyt              = 8  // number of synaptotagmin molecules (with 5 Ca2+ sites each)
-	numY                = 16 // number of second sensor (Y) sites
-	numActiveSyt        = 2  // how many Ca2+ sites need to be bound for sensors
-	numActiveY          = 1  // to become active
-	vesicleFusionEnergy = 40
-	pulseDuration       = 3e-3 // pulse duration in [s]
 )
 
 // type of binding site (syt or second sensor)
 const (
-	sytSite = iota
-	ySite
+	SytSite = iota
+	YSite
 )
 
+// SimModel encapsulates all information related to the simulation/model itself
+// fusion events
+type SimModel struct {
+	CaSensors      []CaSensor
+	VesicleIDs     []string
+	SensorTemplate string
+	NumPulses      int
+	IsiValue       float64
+	PulseDuration  float64
+}
+
+// FusionModel describes the basic ingredients of the fusion model
+type FusionModel struct {
+	NumSyt              int  // number of synaptotagmin molecules (with 5 Ca2+ sites each)
+	NumY                int  // number of second sensor (Y) sites
+	NumActiveSyt        int  // how many Ca2+ sites need to be bound for sensors
+	NumActiveY          int  // to become active
+	VesicleFusionEnergy int  // energy needed to fuse vesicle in energy model
+	EnergyModel         bool // use the energy model
+	SytEnergy           int  // energy of activated synaptotagmin toward vesicle fusion
+	YEnergy             int  // energy of activated Y sites toward vesicle fusion
+	NumActiveSites      int  // number of simultaneously active sites required for release
+}
+
 // CaSensor defines a single synaptotagmin and Y sites
-type caSensor struct {
-	sites    []int // ca sites contributing to sensors
-	siteType int   // type of sensor (syt or Y)
+type CaSensor struct {
+	Sites    []int // ca sites contributing to sensors
+	SiteType int   // type of sensor (syt or Y)
 }
 
 // ActEvent keeps track of a single activation/deactivation event
@@ -62,52 +76,14 @@ type ReleaseEvent struct {
 	eventIter uint64 // iteration when event occurred
 }
 
-var caSensors []caSensor
-
-// random number generator for Metropolis-Hasting
-var rng *rand.Rand
-
-func init() {
-	rng = rand.New(rand.NewSource(time.Now().UnixNano()))
-
-	caSensors = make([]caSensor, numSyt+numY)
-
-	// define synaptogamin and Y sites
-	caSensors[0] = caSensor{[]int{8, 9, 29, 30, 31}, sytSite}
-	caSensors[1] = caSensor{[]int{7, 32, 33, 34, 35}, sytSite}
-	caSensors[2] = caSensor{[]int{3, 6, 36, 37, 38}, sytSite}
-	caSensors[3] = caSensor{[]int{17, 39, 40, 41, 42}, sytSite}
-	caSensors[4] = caSensor{[]int{15, 16, 43, 44, 45}, sytSite}
-	caSensors[5] = caSensor{[]int{14, 46, 47, 48, 49}, sytSite}
-	caSensors[6] = caSensor{[]int{4, 12, 24, 50, 51}, sytSite}
-	caSensors[7] = caSensor{[]int{10, 25, 26, 27, 28}, sytSite}
-	caSensors[8] = caSensor{[]int{122}, ySite}
-	caSensors[9] = caSensor{[]int{70}, ySite}
-	caSensors[10] = caSensor{[]int{126}, ySite}
-	caSensors[11] = caSensor{[]int{142}, ySite}
-	caSensors[12] = caSensor{[]int{62}, ySite}
-	caSensors[13] = caSensor{[]int{118}, ySite}
-	caSensors[14] = caSensor{[]int{22}, ySite}
-	caSensors[15] = caSensor{[]int{134}, ySite}
-	caSensors[16] = caSensor{[]int{110}, ySite}
-	caSensors[17] = caSensor{[]int{66}, ySite}
-	caSensors[18] = caSensor{[]int{106}, ySite}
-	caSensors[19] = caSensor{[]int{130}, ySite}
-	caSensors[20] = caSensor{[]int{2}, ySite}
-	caSensors[21] = caSensor{[]int{114}, ySite}
-	caSensors[22] = caSensor{[]int{42}, ySite}
-	caSensors[23] = caSensor{[]int{138}, ySite}
-}
-
 // analyze is the main entry point for analyzing the mouse AZ model. It
 // determines release events and collects statistics
-func analyze(data *libmbd.MCellData, model *ReleaseModel, energyModel bool, seed,
-	numPulses, numActiveSites, sytEnergy, yEnergy int) ([]string, error) {
+func analyze(data *libmbd.MCellData, m *SimModel, fusion *FusionModel,
+	rng *rand.Rand, seed int) ([]string, error) {
 
 	var releases []*ReleaseEvent
-	for _, vesID := range model.VesicleIDs {
-		evts, err := extractActivationEvents(data, numPulses, seed, vesID,
-			model.SensorTemplateString)
+	for _, vesID := range m.VesicleIDs {
+		evts, err := extractActivationEvents(data, m, fusion, seed, vesID)
 		if err != nil {
 			return nil, err
 		}
@@ -115,8 +91,7 @@ func analyze(data *libmbd.MCellData, model *ReleaseModel, energyModel bool, seed
 			continue
 		}
 
-		rel, err := extractReleaseEvents(evts, data.BlockLen(), energyModel,
-			numActiveSites, sytEnergy, yEnergy, vesID)
+		rel, err := extractReleaseEvents(evts, m, fusion, data.BlockLen(), vesID, rng)
 		if err != nil {
 			return nil, err
 		}
@@ -125,12 +100,13 @@ func analyze(data *libmbd.MCellData, model *ReleaseModel, energyModel bool, seed
 		}
 	}
 
-	return assembleReleaseMsgs(data, seed, releases), nil
+	return assembleReleaseMsgs(data, m, seed, releases), nil
 }
 
 // assembleReleaseMsgs creates a slice of strings with summary statistics for all
 // released vesicles for a given seed
-func assembleReleaseMsgs(data *libmbd.MCellData, seed int, rel []*ReleaseEvent) []string {
+func assembleReleaseMsgs(data *libmbd.MCellData, m *SimModel, seed int,
+	rel []*ReleaseEvent) []string {
 	messages := make([]string, 0)
 	timeStep := data.OutputStepLen()
 	for _, r := range rel {
@@ -139,7 +115,7 @@ func assembleReleaseMsgs(data *libmbd.MCellData, seed int, rel []*ReleaseEvent) 
 		if err != nil {
 			log.Fatal(err)
 		}
-		if err := checkCaNumbers(channels, r); err != nil {
+		if err := checkCaNumbers(m.CaSensors, channels, r); err != nil {
 			fmt.Printf("In seed %d, vesicle %s, time %f\n", seed, r.vesicleID,
 				float64(r.eventIter)*data.OutputStepLen())
 			log.Fatal(err)
@@ -147,9 +123,9 @@ func assembleReleaseMsgs(data *libmbd.MCellData, seed int, rel []*ReleaseEvent) 
 
 		eventTime := float64(r.eventIter) * timeStep
 		// figure out if event happened within or between pulses
-		pulseID := int(math.Floor(eventTime / isiValue))
+		pulseID := int(math.Floor(eventTime / m.IsiValue))
 		var pulseString string
-		if eventTime-float64(pulseID)*isiValue > pulseDuration {
+		if eventTime-float64(pulseID)*m.IsiValue > m.PulseDuration {
 			pulseString = fmt.Sprintf("ISI_%d", pulseID+1)
 		} else {
 			pulseString = fmt.Sprintf("%d", pulseID+1)
@@ -174,32 +150,32 @@ func assembleReleaseMsgs(data *libmbd.MCellData, seed int, rel []*ReleaseEvent) 
 
 // extractActivationEvents returns a slice with actvation and deactivation events
 // for the given vesicle and active zone
-func extractActivationEvents(data *libmbd.MCellData, numPulses, seed int,
-	vesicleID, template string) ([]ActEvent, error) {
+func extractActivationEvents(data *libmbd.MCellData, m *SimModel, fusion *FusionModel,
+	seed int, vesicleID string) ([]ActEvent, error) {
 
 	var events []ActEvent
 	// analyze the activation/deactivation status of each ca sensor.
 	// NOTE: for now we merge the binding data for individual pulses into one
-	for id := 0; id < len(caSensors); id++ {
-		sensor := caSensors[id]
+	for id := 0; id < len(m.CaSensors); id++ {
+		sensor := m.CaSensors[id]
 		sensorString := "sensor"
-		actThresh := numActiveSyt
-		if sensor.siteType == ySite {
+		actThresh := fusion.NumActiveSyt
+		if sensor.SiteType == YSite {
 			sensorString = "sensor_Y"
-			actThresh = numActiveY
+			actThresh = fusion.NumActiveY
 		}
 
 		// NOTE: This could be improved. the templates differ depending on if the
 		// underlying data comes from a single or multi-pulse experiment
 		var dataNames []string
-		for _, s := range sensor.sites {
-			if numPulses == 1 {
-				dataNames = append(dataNames, fmt.Sprintf(template, vesicleID, sensorString,
-					s, seed))
+		for _, s := range sensor.Sites {
+			if m.NumPulses == 1 {
+				dataNames = append(dataNames, fmt.Sprintf(m.SensorTemplate, vesicleID,
+					sensorString, s, seed))
 			} else {
-				for p := 0; p < numPulses; p++ {
-					dataNames = append(dataNames, fmt.Sprintf(template, vesicleID, sensorString,
-						s, p+1, seed))
+				for p := 0; p < m.NumPulses; p++ {
+					dataNames = append(dataNames, fmt.Sprintf(m.SensorTemplate, vesicleID,
+						sensorString, s, p+1, seed))
 				}
 			}
 		}
@@ -237,8 +213,8 @@ func extractActivationEvents(data *libmbd.MCellData, numPulses, seed int,
 
 // extractReleaseEvents determines if the given vesicle was released given
 // a list of sensor activation events. If no release took place returns nil.
-func extractReleaseEvents(evts []ActEvent, maxIter uint64, energyModel bool,
-	numActiveSites, sytEnergy, yEnergy int, vesicleID string) (*ReleaseEvent, error) {
+func extractReleaseEvents(evts []ActEvent, model *SimModel, fusion *FusionModel,
+	maxIter uint64, vesicleID string, rng *rand.Rand) (*ReleaseEvent, error) {
 
 	sort.Sort(byIter(evts))
 	activeEvts := make(map[int]struct{})
@@ -263,14 +239,16 @@ func extractReleaseEvents(evts []ActEvent, maxIter uint64, energyModel bool,
 
 		var rel *ReleaseEvent
 		var relError error
-		if energyModel {
+		if fusion.EnergyModel {
 			// use the energy model to determine release
-			energy := getEnergy(activeEvts, sytEnergy, yEnergy)
-			nextIter := getNextIter(i, maxIter, evts)
-			rel, relError = checkForEnergyRelease(energy, vesicleID, e, activeEvts, nextIter)
+			energy := getEnergy(model.CaSensors, activeEvts, fusion.SytEnergy, fusion.YEnergy)
+			nextEvtIter := getNextEvtIter(i, maxIter, evts)
+			rel, relError = checkForEnergyRelease(fusion.VesicleFusionEnergy, energy,
+				vesicleID, e, activeEvts, nextEvtIter, rng)
 		} else {
 			// use the deterministic model to determine release
-			rel, relError = checkForDeterministicRelease(vesicleID, numActiveSites, e, activeEvts)
+			rel, relError = checkForDeterministicRelease(vesicleID, fusion.NumActiveSites,
+				e, activeEvts)
 		}
 		if relError != nil {
 			return nil, relError
@@ -284,10 +262,10 @@ func extractReleaseEvents(evts []ActEvent, maxIter uint64, energyModel bool,
 
 // getEnergy computes the total energy corresponding to the current number
 // of active synaptotagmin and Y sites. Also returns the number of active syts
-func getEnergy(events map[int]struct{}, sytEnergy, yEnergy int) int {
+func getEnergy(caSensors []CaSensor, events map[int]struct{}, sytEnergy, yEnergy int) int {
 	var energy int
 	for s, _ := range events {
-		if caSensors[s].siteType == sytSite {
+		if caSensors[s].SiteType == SytSite {
 			energy += sytEnergy
 		} else {
 			energy += yEnergy
@@ -296,9 +274,9 @@ func getEnergy(events map[int]struct{}, sytEnergy, yEnergy int) int {
 	return energy
 }
 
-// getNextIter determines the iteration of the next event that will happen in
+// getNextEvtIter determines the iteration of the next event that will happen in
 // the event queue
-func getNextIter(iter int, maxIter uint64, evts []ActEvent) uint64 {
+func getNextEvtIter(iter int, maxIter uint64, evts []ActEvent) uint64 {
 	nextIter := maxIter
 	if iter < len(evts)-1 {
 		nextIter = uint64(evts[iter+1].eventIter)
@@ -327,14 +305,14 @@ func checkForDeterministicRelease(vesID string, numActiveSites int, evt ActEvent
 // energy until next event or the end of simulation. To do this we basically
 // test for each iteration between now and the next event if a release takes
 // place using the Metrolpolis-Hasting algorithm
-func checkForEnergyRelease(energy int, vesID string, evt ActEvent,
-	activeEvts map[int]struct{}, nextIter uint64) (*ReleaseEvent, error) {
+func checkForEnergyRelease(fusionEnergy, energy int, vesID string, evt ActEvent,
+	activeEvts map[int]struct{}, nextEvtIter uint64, rng *rand.Rand) (*ReleaseEvent, error) {
 
-	numIters := nextIter - uint64(evt.eventIter)
-	if nextIter < uint64(evt.eventIter) {
+	numIters := nextEvtIter - uint64(evt.eventIter)
+	if nextEvtIter < uint64(evt.eventIter) {
 		return nil, fmt.Errorf("encountered out of order release event")
 	}
-	if iter, ok := checkForRelease(energy, numIters); ok {
+	if iter, ok := checkForRelease(fusionEnergy, energy, numIters, rng); ok {
 		var sensors []int
 		for a, _ := range activeEvts {
 			sensors = append(sensors, a)
@@ -347,7 +325,8 @@ func checkForEnergyRelease(energy int, vesID string, evt ActEvent,
 
 // checkForReleases uses a Metropolis-Hasting scheme to test numIter times
 // if vesicle release happens given the provided bound sensor energy
-func checkForRelease(energy int, numIters uint64) (uint64, bool) {
+func checkForRelease(vesicleFusionEnergy, energy int, numIters uint64,
+	rng *rand.Rand) (uint64, bool) {
 
 	if energy >= vesicleFusionEnergy {
 		return 0, true
@@ -368,16 +347,16 @@ func checkForRelease(energy int, numIters uint64) (uint64, bool) {
 // checkCaNumbers does a sanity check to ensure that the number of bound
 // calcium ions is equal or larger than what is expected based on the activated
 // syt and Y sites
-func checkCaNumbers(channels map[string]float64, r *ReleaseEvent) error {
+func checkCaNumbers(caSensors []CaSensor, channels map[string]float64, r *ReleaseEvent) error {
 	var expected int
 	for _, s := range r.sensors {
-		if caSensors[s].siteType == sytSite {
+		if caSensors[s].SiteType == SytSite {
 			expected += 2
-		} else if caSensors[s].siteType == ySite {
+		} else if caSensors[s].SiteType == YSite {
 			expected += 1
 		} else {
 			return fmt.Errorf("in checkCaNumbers: Encountered incorrect binding site "+
-				"type %d", caSensors[s].siteType)
+				"type %d", caSensors[s].SiteType)
 		}
 	}
 

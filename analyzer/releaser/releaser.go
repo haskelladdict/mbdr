@@ -1,14 +1,14 @@
 // mouseAnalyzer determines vesicle release events and latencies for our
 // mouse NMJ 6 AZ model with two synaptic vesicles each according to the
 // second sensor faciliation model (see Ma et al., J. Neurophys, 2014)
-package releaseAnalyzer
+package releaser
 
 import (
-	"flag"
 	"fmt"
 	"github.com/haskelladdict/mbdr/libmbd"
 	"github.com/haskelladdict/mbdr/parser"
 	"log"
+	"math/rand"
 	"os"
 	"runtime"
 	"runtime/debug"
@@ -16,45 +16,6 @@ import (
 	"strings"
 	"time"
 )
-
-type ReleaseModel struct {
-	VesicleIDs           []string
-	SensorTemplateString string
-}
-
-var (
-	numPulses      int     // number of AP pulses
-	energyModel    bool    // use the energy model
-	sytEnergy      int     // energy of activated synaptotagmin toward vesicle fusion
-	yEnergy        int     // energy of activated Y sites toward vesicle fusion
-	numActiveSites int     // number of simultaneously active sites required for release
-	isiValue       float64 // interstimulus interval
-	numThreads     int     // number of simultaneous threads - each thread works
-	// on a single binary mcell data output file
-)
-
-func init() {
-	flag.IntVar(&numPulses, "p", 1, "number of AP pulses in the model")
-	flag.IntVar(&sytEnergy, "s", -1, "energy of active synaptotagmin sites "+
-		"(required with -e flag)")
-	flag.IntVar(&yEnergy, "y", -1, "energy of active y sites "+
-		"(required with -e flag")
-	flag.BoolVar(&energyModel, "e", false, "use the energy model instead of "+
-		"deterministic model")
-	flag.IntVar(&numActiveSites, "n", 0, "number of sites required for activation"+
-		"for deterministic model")
-	flag.Float64Var(&isiValue, "i", -1.0, "pulse duration in [s] for analysis multi "+
-		"pulse data")
-	flag.IntVar(&numThreads, "T", 1, "number of threads. Each thread works on a "+
-		"single binary output file\n\tso memory requirements multiply")
-}
-
-// usage prints a brief usage information to stdout
-func usage() {
-	fmt.Println("usage: mouseAnalyzer [options] <binary mcell files>")
-	fmt.Println("\noptions:")
-	flag.PrintDefaults()
-}
 
 // extractSeed attempts to extract the seed from the filename of the provided
 // binary mcell data file.
@@ -80,23 +41,23 @@ func extractSeed(fileName string) (int, error) {
 
 // printHeader prints and informative header file with date and commandline
 // options requested for analysis
-func printHeader() {
+func printHeader(model *SimModel, fusion *FusionModel) {
 	fmt.Println("mouseAnalyzer ran on", time.Now())
 	if host, err := os.Hostname(); err == nil {
 		fmt.Println("on ", host)
 	}
 	fmt.Println("\n-------------- parameters --------------")
-	fmt.Println("number of pulses       :", numPulses)
-	if numPulses > 1 {
-		fmt.Println("ISI                    :", isiValue, "s")
+	fmt.Println("number of pulses       :", model.NumPulses)
+	if model.NumPulses > 1 {
+		fmt.Println("ISI                    :", model.IsiValue, "s")
 	}
-	if energyModel {
+	if fusion.EnergyModel {
 		fmt.Println("model                  : energy model")
-		fmt.Println("syt energy             :", sytEnergy)
-		fmt.Println("y energy               :", yEnergy)
+		fmt.Println("syt energy             :", fusion.SytEnergy)
+		fmt.Println("y energy               :", fusion.YEnergy)
 	} else {
 		fmt.Println("model                  : deterministic model")
-		fmt.Println("number of active sites :", numActiveSites)
+		fmt.Println("number of active sites :", fusion.NumActiveSites)
 	}
 	fmt.Println("-------------- data --------------------")
 	fmt.Println("")
@@ -156,7 +117,12 @@ func createAnalysisJobs(fileNames []string, analysisJobs chan<- string) {
 	close(analysisJobs)
 }
 
-func runJob(analysisJobs <-chan string, done chan<- []string, model *ReleaseModel) {
+// runJob is responsible for analyzing the data files provided in the
+// analysisJob channel
+func runJob(analysisJobs <-chan string, done chan<- []string, m *SimModel,
+	f *FusionModel) {
+
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	for fileName := range analysisJobs {
 		seed, err := extractSeed(fileName)
@@ -172,8 +138,7 @@ func runJob(analysisJobs <-chan string, done chan<- []string, model *ReleaseMode
 			done <- nil
 		}
 
-		releaseMsgs, err := analyze(data, model, energyModel, seed, numPulses,
-			numActiveSites, sytEnergy, yEnergy)
+		releaseMsgs, err := analyze(data, m, f, rng, seed)
 		if err != nil {
 			fmt.Println(err)
 			done <- nil
@@ -187,39 +152,34 @@ func runJob(analysisJobs <-chan string, done chan<- []string, model *ReleaseMode
 	}
 }
 
-// main entry point
-func Run(model *ReleaseModel) {
-	flag.Parse()
-	if len(flag.Args()) == 0 {
-		usage()
-		return
-	}
-
+// Run is the main entry point for the release analysis and spawns the
+// requested number of analysis goroutines
+func Run(model *SimModel, fusion *FusionModel, args []string, numThreads int) {
 	// some sanity checks
-	if energyModel && (sytEnergy < 0 || yEnergy < 0) {
+	if fusion.EnergyModel && (fusion.SytEnergy < 0 || fusion.YEnergy < 0) {
 		log.Fatal("Please provide a non-negative synaptotagmin and y site energy")
 	}
 
-	if !energyModel && numActiveSites == 0 {
+	if !fusion.EnergyModel && fusion.NumActiveSites == 0 {
 		log.Fatal("Please provide a positive count for the number of required active sites")
 	}
 
-	if numPulses > 1 && isiValue <= 0 {
+	if model.NumPulses > 1 && model.IsiValue <= 0 {
 		log.Fatal("Analysis multi-pulse data requires a non-zero ISI value.")
 	}
 
 	// request proper number of go routines
 	runtime.GOMAXPROCS(numThreads)
 
-	printHeader()
+	printHeader(model, fusion)
 	analysisJobs := make(chan string)
-	go createAnalysisJobs(flag.Args(), analysisJobs)
+	go createAnalysisJobs(args, analysisJobs)
 
 	done := make(chan []string)
 	for i := 0; i < numThreads; i++ {
-		go runJob(analysisJobs, done, model)
+		go runJob(analysisJobs, done, model, fusion)
 	}
-	for i := 0; i < len(flag.Args()); i++ {
+	for i := 0; i < len(args); i++ {
 		msgs := <-done
 		for _, m := range msgs {
 			fmt.Println(m)
