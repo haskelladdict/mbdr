@@ -92,7 +92,7 @@ func determineCaChanContrib(data *libmbd.MCellData, rel *ReleaseEvent) (map[stri
 			if err != nil {
 				return nil, err
 			}
-			channels[caString] = c.Col[0][rel.eventIter]
+			channels[caString] += c.Col[0][rel.eventIter]
 		}
 	}
 
