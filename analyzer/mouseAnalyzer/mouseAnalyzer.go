@@ -14,7 +14,7 @@ import (
 var model = rel.SimModel{
 	VesicleIDs: []string{"1_1", "1_2", "2_1", "2_2", "3_1", "3_2", "4_1", "5_1",
 		"5_2", "6_1", "6_2"},
-	SensorTemplate: "bound_vesicle_%s_%s_%02d.%04d.dat",
+	SensorTemplate: "bound_vesicle_%s_%s_%d.%04d.dat",
 	PulseDuration:  3e-3,
 	NumPulses:      1,
 }
