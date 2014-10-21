@@ -1,7 +1,6 @@
 // mouseAnalyzer determines vesicle release events and latencies for our
 // mouse NMJ 6 AZ model with two synaptic vesicles each according to the
-// the original excess-calcium-binding-site model
-// (Dittrich et al., Biophys. J, 2013, 104:2751-2763)
+// second sensor faciliation model (see Ma et al., J. Neurophys, 2014)
 package main
 
 import (
@@ -14,16 +13,17 @@ import (
 var model = rel.SimModel{
 	VesicleIDs: []string{"1_1", "1_2", "2_1", "2_2", "3_1", "3_2", "4_1", "5_1",
 		"5_2", "6_1", "6_2"},
-	SensorTemplate: "bound_vesicle_%s_%s_%02d.%04d.dat",
+	SensorTemplate: "bound_vesicle_%s_%s_%02d_%d.%04d.dat",
 	PulseDuration:  3e-3,
-	NumPulses:      1,
 }
 
 // fusion model
 var fusionModel = rel.FusionModel{
-	NumSyt:       8,
-	NumActiveSyt: 2,
-	EnergyModel:  false,
+	NumSyt:              8,
+	NumY:                16,
+	NumActiveSyt:        2,
+	NumActiveY:          1,
+	VesicleFusionEnergy: 40,
 }
 
 // number of threads
@@ -32,8 +32,17 @@ var numThreads int
 // initialize simulation and fusion model parameters coming from commandline
 func init() {
 
+	flag.IntVar(&model.NumPulses, "p", 1, "number of AP pulses in the model")
+	flag.IntVar(&fusionModel.SytEnergy, "s", -1, "energy of active synaptotagmin sites "+
+		"(required with -e flag)")
+	flag.IntVar(&fusionModel.YEnergy, "y", -1, "energy of active y sites "+
+		"(required with -e flag")
+	flag.BoolVar(&fusionModel.EnergyModel, "e", false, "use the energy model instead of "+
+		"deterministic model")
 	flag.IntVar(&fusionModel.NumActiveSites, "n", 0, "number of sites required for activation "+
 		"of deterministic model")
+	flag.Float64Var(&model.IsiValue, "i", -1.0, "pulse duration in [s] for analysis multi "+
+		"pulse data")
 	flag.IntVar(&numThreads, "T", 1, "number of threads. Each thread works on a "+
 		"single binary output file\n\tso memory requirements multiply")
 
@@ -47,11 +56,27 @@ func init() {
 	model.CaSensors[5] = rel.CaSensor{[]int{14, 46, 47, 48, 49}, rel.SytSite}
 	model.CaSensors[6] = rel.CaSensor{[]int{4, 12, 24, 50, 51}, rel.SytSite}
 	model.CaSensors[7] = rel.CaSensor{[]int{10, 25, 26, 27, 28}, rel.SytSite}
+	model.CaSensors[8] = rel.CaSensor{[]int{122}, rel.YSite}
+	model.CaSensors[9] = rel.CaSensor{[]int{70}, rel.YSite}
+	model.CaSensors[10] = rel.CaSensor{[]int{126}, rel.YSite}
+	model.CaSensors[11] = rel.CaSensor{[]int{142}, rel.YSite}
+	model.CaSensors[12] = rel.CaSensor{[]int{62}, rel.YSite}
+	model.CaSensors[13] = rel.CaSensor{[]int{118}, rel.YSite}
+	model.CaSensors[14] = rel.CaSensor{[]int{22}, rel.YSite}
+	model.CaSensors[15] = rel.CaSensor{[]int{134}, rel.YSite}
+	model.CaSensors[16] = rel.CaSensor{[]int{110}, rel.YSite}
+	model.CaSensors[17] = rel.CaSensor{[]int{66}, rel.YSite}
+	model.CaSensors[18] = rel.CaSensor{[]int{106}, rel.YSite}
+	model.CaSensors[19] = rel.CaSensor{[]int{130}, rel.YSite}
+	model.CaSensors[20] = rel.CaSensor{[]int{2}, rel.YSite}
+	model.CaSensors[21] = rel.CaSensor{[]int{114}, rel.YSite}
+	model.CaSensors[22] = rel.CaSensor{[]int{42}, rel.YSite}
+	model.CaSensors[23] = rel.CaSensor{[]int{138}, rel.YSite}
 }
 
 // usage prints a brief usage information to stdout
 func usage() {
-	fmt.Println("usage: mouseAnalyzer [options] <binary mcell files>")
+	fmt.Println("usage: mouseAnalyzerY [options] <binary mcell files>")
 	fmt.Println("\noptions:")
 	flag.PrintDefaults()
 }

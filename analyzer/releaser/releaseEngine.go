@@ -123,7 +123,12 @@ func assembleReleaseMsgs(data *libmbd.MCellData, m *SimModel, seed int,
 
 		eventTime := float64(r.eventIter) * timeStep
 		// figure out if event happened within or between pulses
-		pulseID := int(math.Floor(eventTime / m.IsiValue))
+		var pulseID int
+		if m.IsiValue == 0 {
+			pulseID = 0
+		} else {
+			pulseID = int(math.Floor(eventTime / m.IsiValue))
+		}
 		var pulseString string
 		if eventTime-float64(pulseID)*m.IsiValue > m.PulseDuration {
 			pulseString = fmt.Sprintf("ISI_%d", pulseID+1)
@@ -304,7 +309,7 @@ func checkForDeterministicRelease(vesID string, numActiveSites int, evt ActEvent
 // syt and y site energies takes place. Check for releases given the current
 // energy until next event or the end of simulation. To do this we basically
 // test for each iteration between now and the next event if a release takes
-// place using the Metrolpolis-Hasting algorithm
+// place using the Metropolis-Hastings algorithm
 func checkForEnergyRelease(fusionEnergy, energy int, vesID string, evt ActEvent,
 	activeEvts map[int]struct{}, nextEvtIter uint64, rng *rand.Rand) (*ReleaseEvent, error) {
 
