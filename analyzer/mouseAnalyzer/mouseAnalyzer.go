@@ -10,6 +10,12 @@ import (
 	rel "github.com/haskelladdict/mbdr/analyzer/releaser"
 )
 
+// analyser info
+var info = rel.AnalyzerInfo{
+	Name:    "mouseAnalyzer",
+	Version: "0.1",
+}
+
 // simulation model
 var model = rel.SimModel{
 	VesicleIDs: []string{"1_1", "1_2", "2_1", "2_2", "3_1", "3_2", "4_1", "4_2",
@@ -26,15 +32,12 @@ var fusionModel = rel.FusionModel{
 	EnergyModel:  false,
 }
 
-// number of threads
-var numThreads int
-
 // initialize simulation and fusion model parameters coming from commandline
 func init() {
 
 	flag.IntVar(&fusionModel.NumActiveSites, "n", 0, "number of sites required for activation "+
 		"of deterministic model")
-	flag.IntVar(&numThreads, "T", 1, "number of threads. Each thread works on a "+
+	flag.IntVar(&info.NumThreads, "T", 1, "number of threads. Each thread works on a "+
 		"single binary output file\n\tso memory requirements multiply")
 
 	// define synaptogamin and Y sites
@@ -51,7 +54,8 @@ func init() {
 
 // usage prints a brief usage information to stdout
 func usage() {
-	fmt.Println("usage: mouseAnalyzer [options] <binary mcell files>")
+	fmt.Printf("%s v%s  (C) 2014 Markus Dittrich\n\n", info.Name, info.Version)
+	fmt.Printf("usage: %s [options] <binary mcell files>\n", info.Name)
 	fmt.Println("\noptions:")
 	flag.PrintDefaults()
 }
@@ -64,5 +68,5 @@ func main() {
 		return
 	}
 
-	rel.Run(&model, &fusionModel, flag.Args(), numThreads)
+	rel.Run(&model, &fusionModel, &info, flag.Args())
 }

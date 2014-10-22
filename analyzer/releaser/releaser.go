@@ -41,8 +41,8 @@ func extractSeed(fileName string) (int, error) {
 
 // printHeader prints and informative header file with date and commandline
 // options requested for analysis
-func printHeader(model *SimModel, fusion *FusionModel) {
-	fmt.Println("mouseAnalyzer ran on", time.Now())
+func printHeader(model *SimModel, fusion *FusionModel, info *AnalyzerInfo) {
+	fmt.Printf("%s v%s ran on %s\n", info.Name, info.Version, time.Now())
 	if host, err := os.Hostname(); err == nil {
 		fmt.Println("on ", host)
 	}
@@ -154,7 +154,7 @@ func runJob(analysisJobs <-chan string, done chan<- []string, m *SimModel,
 
 // Run is the main entry point for the release analysis and spawns the
 // requested number of analysis goroutines
-func Run(model *SimModel, fusion *FusionModel, args []string, numThreads int) {
+func Run(model *SimModel, fusion *FusionModel, info *AnalyzerInfo, args []string) {
 	// some sanity checks
 	if fusion.EnergyModel && (fusion.SytEnergy < 0 || fusion.YEnergy < 0) {
 		log.Fatal("Please provide a non-negative synaptotagmin and y site energy")
@@ -169,14 +169,14 @@ func Run(model *SimModel, fusion *FusionModel, args []string, numThreads int) {
 	}
 
 	// request proper number of go routines
-	runtime.GOMAXPROCS(numThreads)
+	runtime.GOMAXPROCS(info.NumThreads)
 
-	printHeader(model, fusion)
+	printHeader(model, fusion, info)
 	analysisJobs := make(chan string)
 	go createAnalysisJobs(args, analysisJobs)
 
 	done := make(chan []string)
-	for i := 0; i < numThreads; i++ {
+	for i := 0; i < info.NumThreads; i++ {
 		go runJob(analysisJobs, done, model, fusion)
 	}
 	for i := 0; i < len(args); i++ {

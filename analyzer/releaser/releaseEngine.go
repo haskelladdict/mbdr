@@ -16,6 +16,13 @@ const (
 	YSite
 )
 
+// AnalyzerInfo keeps basic stats on the analyzer itself
+type AnalyzerInfo struct {
+	Name       string
+	Version    string
+	NumThreads int
+}
+
 // SimModel encapsulates all information related to the simulation/model itself
 // fusion events
 type SimModel struct {

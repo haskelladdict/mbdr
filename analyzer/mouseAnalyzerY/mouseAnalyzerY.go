@@ -17,6 +17,12 @@ var model = rel.SimModel{
 	PulseDuration:  3e-3,
 }
 
+// analyser info
+var info = rel.AnalyzerInfo{
+	Name:    "mouseAnalyzerY",
+	Version: "0.1",
+}
+
 // fusion model
 var fusionModel = rel.FusionModel{
 	NumSyt:              8,
@@ -25,9 +31,6 @@ var fusionModel = rel.FusionModel{
 	NumActiveY:          1,
 	VesicleFusionEnergy: 40,
 }
-
-// number of threads
-var numThreads int
 
 // initialize simulation and fusion model parameters coming from commandline
 func init() {
@@ -43,7 +46,7 @@ func init() {
 		"of deterministic model")
 	flag.Float64Var(&model.IsiValue, "i", -1.0, "pulse duration in [s] for analysis multi "+
 		"pulse data")
-	flag.IntVar(&numThreads, "T", 1, "number of threads. Each thread works on a "+
+	flag.IntVar(&info.NumThreads, "T", 1, "number of threads. Each thread works on a "+
 		"single binary output file\n\tso memory requirements multiply")
 
 	// define synaptogamin and Y sites
@@ -76,7 +79,8 @@ func init() {
 
 // usage prints a brief usage information to stdout
 func usage() {
-	fmt.Println("usage: mouseAnalyzerY [options] <binary mcell files>")
+	fmt.Printf("%s v%s  (C) 2014 Markus Dittrich\n\n", info.Name, info.Version)
+	fmt.Printf("usage: %s [options] <binary mcell files>\n", info.Name)
 	fmt.Println("\noptions:")
 	flag.PrintDefaults()
 }
@@ -89,5 +93,5 @@ func main() {
 		return
 	}
 
-	rel.Run(&model, &fusionModel, flag.Args(), numThreads)
+	rel.Run(&model, &fusionModel, &info, flag.Args())
 }
