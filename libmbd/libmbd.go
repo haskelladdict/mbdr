@@ -238,7 +238,14 @@ func (d *MCellData) blockDataAPI2(id uint64) (*CountData, error) {
 
 	row := uint64(0)
 	stream := uint64(1)
-	loc := d.OutputBufSize * util.LenFloat64 * entry.Offset
+	var loc uint64
+	// NOTE: We need this to be able to deal with checkpoint files for which
+	// the total number of items may be smaller than the output buffer size
+	if d.BlockSize < d.OutputBufSize {
+		loc = d.BlockSize * util.LenFloat64 * entry.Offset
+	} else {
+		loc = d.OutputBufSize * util.LenFloat64 * entry.Offset
+	}
 	// read all rows until we hit the total blockSize
 	for row < d.BlockSize {
 
