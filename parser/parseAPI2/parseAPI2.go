@@ -20,20 +20,6 @@ func Header(r io.Reader, data *libmbd.MCellData) (*libmbd.MCellData, error) {
 	return data, nil
 }
 
-/*
-// ParseData parses the actual data stored in the binary output file.
-func ParseData(r io.Reader, data *libmbd.MCellData) (*libmbd.MCellData, error) {
-	//	if err := parseHeader(r, data); err != nil {
-	//		return nil, err
-	//	}
-
-	if err := parseData(r, data); err != nil {
-		return nil, err
-	}
-
-	return data, nil
-}*/
-
 // Data reads all of the binary count data into MCellData's properly
 // preallocated []byte buffer
 func Data(r io.Reader, data *libmbd.MCellData) (*libmbd.MCellData, error) {
