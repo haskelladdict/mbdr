@@ -44,33 +44,34 @@ func main() {
 		return
 	}
 
-	filename := flag.Args()[0]
-	var data *libmbd.MCellData
-	var err error
-	if infoFlag || listFlag {
-		if data, err = parser.ReadHeader(filename); err != nil {
-			log.Fatal(err)
+	for _, filename := range flag.Args() {
+		var data *libmbd.MCellData
+		var err error
+		if infoFlag || listFlag {
+			if data, err = parser.ReadHeader(filename); err != nil {
+				log.Fatal(err)
+			}
+		} else if extractFlag {
+			if data, err = parser.Read(filename); err != nil {
+				log.Fatal(err)
+			}
+		} else {
+			fmt.Println("\nError: Please specify at least one of -i, -l, or -e!")
+			usage()
+			return
 		}
-	} else if extractFlag {
-		if data, err = parser.Read(filename); err != nil {
-			log.Fatal(err)
-		}
-	} else {
-		fmt.Println("\nError: Please specify at least one of -i, -l, or -e!")
-		usage()
-		return
-	}
 
-	switch {
-	case infoFlag:
-		showInfo(data)
+		switch {
+		case infoFlag:
+			showInfo(data)
 
-	case listFlag:
-		showAvailableData(data)
+		case listFlag:
+			showAvailableData(data)
 
-	case extractFlag:
-		if err := extractData(data); err != nil {
-			log.Fatal(err)
+		case extractFlag:
+			if err := extractData(data); err != nil {
+				log.Fatal(err)
+			}
 		}
 	}
 }
