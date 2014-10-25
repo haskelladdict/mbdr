@@ -1,4 +1,4 @@
-// libmbd contains data structures and helper routines for extracting reaction
+// Package libmbd contains data structures and helper routines for extracting reaction
 // data from binary mcell reaction data output files
 package libmbd
 
@@ -17,8 +17,10 @@ const (
 )
 
 // list of currently know API versions
-const API1 = "MCELL_BINARY_API_1"
-const API2 = "MCELL_BINARY_API_2"
+const (
+	API1 = "MCELL_BINARY_API_1"
+	API2 = "MCELL_BINARY_API_2"
+)
 
 // MCellData tracks the data contained in the binary mcell file as well as
 // relevant metadata to retrieve specific data items.
@@ -53,7 +55,7 @@ type BlockEntry struct {
 	End   uint64
 }
 
-// API1Data are data items specific to API version 1 of the mcell binary output
+// API2Data are data items specific to API version 1 of the mcell binary output
 // format.
 type API2Data struct {
 	OutputBufSize uint64

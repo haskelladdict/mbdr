@@ -1,3 +1,5 @@
+// Package releaser determines vesicle release events and latencies for our
+// from and mouse NMJ AZ models.
 package releaser
 
 import (
@@ -158,7 +160,6 @@ func assembleReleaseMsgs(data *libmbd.MCellData, m *SimModel, seed int,
 		fmt.Fprintf(buffer, "  channels: [")
 
 		// sort channels to make output consistent across runs
-		//var channels = sort.StringSlice()
 		var cs sort.StringSlice
 		for n := range channels {
 			cs = append(cs, n)

@@ -1,12 +1,9 @@
-// mouseAnalyzer determines vesicle release events and latencies for our
-// mouse NMJ 6 AZ model with two synaptic vesicles each according to the
-// second sensor faciliation model (see Ma et al., J. Neurophys, 2014)
+// Package releaser determines vesicle release events and latencies for our
+// from and mouse NMJ AZ models.
 package releaser
 
 import (
 	"fmt"
-	"github.com/haskelladdict/mbdr/libmbd"
-	"github.com/haskelladdict/mbdr/parser"
 	"log"
 	"math/rand"
 	"os"
@@ -15,6 +12,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/haskelladdict/mbdr/libmbd"
+	"github.com/haskelladdict/mbdr/parser"
 )
 
 // extractSeed attempts to extract the seed from the filename of the provided

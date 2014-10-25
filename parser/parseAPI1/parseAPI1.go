@@ -1,13 +1,15 @@
-// parseAPI1 contains the infrastructure for parsing MCell binary reaction data
-// output that was written according to API version MCELL_BINARY_API_1.
+// Package parseAPI1 contains the infrastructure for parsing MCell binary
+// reaction data output that was written according to API version
+// MCELL_BINARY_API_1.
 package parseAPI1
 
 import (
 	"bytes"
 	"fmt"
+	"io"
+
 	"github.com/haskelladdict/mbdr/libmbd"
 	"github.com/haskelladdict/mbdr/parser/util"
-	"io"
 )
 
 // Header parses the header without reading the actual data. This provides

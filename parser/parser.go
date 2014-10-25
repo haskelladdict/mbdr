@@ -1,15 +1,16 @@
-// parser is a wrapper around the main parsing routines. It figures out the
-// API version of the underlying data and then dispatches the proper parser.
+// Package parser is a wrapper around the main parsing routines. It figures out
+// the API version of the underlying data and then dispatches the proper parser.
 package parser
 
 import (
 	"compress/bzip2"
 	"fmt"
+	"io"
+	"os"
+
 	"github.com/haskelladdict/mbdr/libmbd"
 	"github.com/haskelladdict/mbdr/parser/parseAPI1"
 	"github.com/haskelladdict/mbdr/parser/parseAPI2"
-	"io"
-	"os"
 )
 
 const apiTagLength = len("MCELL_BINARY_API_2")
