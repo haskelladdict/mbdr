@@ -4,8 +4,9 @@ package libmbd
 
 import (
 	"fmt"
-	"github.com/haskelladdict/mbdr/parser/util"
 	"regexp"
+
+	"github.com/haskelladdict/mbdr/parser/util"
 )
 
 // enumeration describing the output type of the included data
@@ -264,7 +265,7 @@ func (d *MCellData) blockDataAPI2(id uint64) (*CountData, error) {
 
 			stream++
 		}
-
+		//fmt.Println(len(d.Buffer), "**** ", loc, d.BlockSize, d.OutputBufSize)
 		// read current row
 		for i := uint64(0); i < entry.NumCols; i++ {
 			buf := (d.Buffer)[loc:]

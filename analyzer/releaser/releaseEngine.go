@@ -3,11 +3,12 @@ package releaser
 import (
 	"bytes"
 	"fmt"
-	"github.com/haskelladdict/mbdr/libmbd"
 	"log"
 	"math"
 	"math/rand"
 	"sort"
+
+	"github.com/haskelladdict/mbdr/libmbd"
 )
 
 // type of binding site (syt or second sensor)
@@ -114,7 +115,7 @@ func analyze(data *libmbd.MCellData, m *SimModel, fusion *FusionModel,
 // released vesicles for a given seed
 func assembleReleaseMsgs(data *libmbd.MCellData, m *SimModel, seed int,
 	rel []*ReleaseEvent) []string {
-	messages := make([]string, 0)
+	var messages []string
 	timeStep := data.OutputStepLen()
 	for _, r := range rel {
 		buffer := bytes.NewBufferString("")
@@ -146,14 +147,27 @@ func assembleReleaseMsgs(data *libmbd.MCellData, m *SimModel, seed int,
 		fmt.Fprintf(buffer, "seed : %d   vesicleID : %s   time : %e   pulseID : %s", seed,
 			r.vesicleID, eventTime, pulseString)
 		fmt.Fprintf(buffer, "  sensors: [")
-		for _, s := range r.sensors {
+
+		// sort sensors to make output consistent across runs
+		var sensors = sort.IntSlice(r.sensors)
+		sensors.Sort()
+		for _, s := range sensors {
 			fmt.Fprintf(buffer, "%d ", s)
 		}
 		fmt.Fprintf(buffer, "]")
 		fmt.Fprintf(buffer, "  channels: [")
-		for n, c := range channels {
-			fmt.Fprintf(buffer, "%s : %d  ", n, int(c))
+
+		// sort channels to make output consistent across runs
+		//var channels = sort.StringSlice()
+		var cs sort.StringSlice
+		for n := range channels {
+			cs = append(cs, n)
 		}
+		cs.Sort()
+		for _, c := range cs {
+			fmt.Fprintf(buffer, "%s : %d  ", c, int(channels[c]))
+		}
+
 		fmt.Fprintf(buffer, "]")
 		messages = append(messages, buffer.String())
 	}
@@ -276,7 +290,7 @@ func extractReleaseEvents(evts []ActEvent, model *SimModel, fusion *FusionModel,
 // of active synaptotagmin and Y sites. Also returns the number of active syts
 func getEnergy(caSensors []CaSensor, events map[int]struct{}, sytEnergy, yEnergy int) int {
 	var energy int
-	for s, _ := range events {
+	for s := range events {
 		if caSensors[s].SiteType == SytSite {
 			energy += sytEnergy
 		} else {
@@ -303,7 +317,7 @@ func checkForDeterministicRelease(vesID string, numActiveSites int, evt ActEvent
 	activeEvts map[int]struct{}) (*ReleaseEvent, error) {
 	if len(activeEvts) == numActiveSites {
 		var sensors []int
-		for a, _ := range activeEvts {
+		for a := range activeEvts {
 			sensors = append(sensors, a)
 		}
 		return &ReleaseEvent{sensors: sensors, vesicleID: vesID,
@@ -326,7 +340,7 @@ func checkForEnergyRelease(fusionEnergy, energy int, vesID string, evt ActEvent,
 	}
 	if iter, ok := checkForRelease(fusionEnergy, energy, numIters, rng); ok {
 		var sensors []int
-		for a, _ := range activeEvts {
+		for a := range activeEvts {
 			sensors = append(sensors, a)
 		}
 		return &ReleaseEvent{sensors: sensors, vesicleID: vesID,
@@ -365,7 +379,7 @@ func checkCaNumbers(caSensors []CaSensor, channels map[string]float64, r *Releas
 		if caSensors[s].SiteType == SytSite {
 			expected += 2
 		} else if caSensors[s].SiteType == YSite {
-			expected += 1
+			expected++
 		} else {
 			return fmt.Errorf("in checkCaNumbers: Encountered incorrect binding site "+
 				"type %d", caSensors[s].SiteType)
