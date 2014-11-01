@@ -1,26 +1,28 @@
-// mouseAnalyzer determines vesicle release events and latencies for our
-// mouse NMJ 6 AZ model with two synaptic vesicles each according to the
-// second sensor faciliation model (see Ma et al., J. Neurophys, 2014)
+// frogAnalyzer determines vesicle release events and latencies for our
+// frog NMJ model according to the second sensor facilitation model
+// (see Ma et al., J. Neurophys, 2014)
 package main
 
 import (
 	"flag"
 	"fmt"
-	rel "github.com/haskelladdict/mbdr/analyzer/releaser"
-)
 
-// simulation model
-var model = rel.SimModel{
-	VesicleIDs: []string{"1_1", "1_2", "2_1", "2_2", "3_1", "3_2", "4_1", "4_2",
-		"5_1", "5_2", "6_1", "6_2"},
-	SensorTemplate: "bound_vesicle_%s_%s_%d_%d.%04d.dat",
-	PulseDuration:  3e-3,
-}
+	rel "github.com/haskelladdict/mbdr/releaser"
+)
 
 // analyser info
 var info = rel.AnalyzerInfo{
-	Name:    "mouseAnalyzerY",
+	Name:    "frogAnalyzerY",
 	Version: "0.1",
+}
+
+// simulation model
+var model = rel.SimModel{
+	VesicleIDs: []string{"01", "02", "03", "04", "05", "06", "07", "08", "09",
+		"10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22",
+		"23", "24", "25", "26"},
+	SensorTemplate: "bound_vesicle_%s_%s_%02d_%d.%04d.dat",
+	PulseDuration:  3e-3,
 }
 
 // fusion model

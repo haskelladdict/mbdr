@@ -6,7 +6,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	rel "github.com/haskelladdict/mbdr/analyzer/releaser"
+
+	rel "github.com/haskelladdict/mbdr/releaser"
 )
 
 // analyser info
