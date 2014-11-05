@@ -29,12 +29,13 @@ type AnalyzerInfo struct {
 // SimModel encapsulates all information related to the simulation/model itself
 // fusion events
 type SimModel struct {
-	CaSensors      []CaSensor
-	VesicleIDs     []string
-	SensorTemplate string
-	NumPulses      int
-	IsiValue       float64
-	PulseDuration  float64
+	CaSensors      []CaSensor        // list of Ca sensor sites per synaptotagmin/Y site
+	VesicleIDs     []string          // list of vesicle IDs
+	VGCCVesicleMap map[string]string // map of vesicles to their main channel
+	SensorTemplate string            // fmt string the analyzer will use to extract binding events
+	NumPulses      int               // number of stimulation events in data
+	IsiValue       float64           // value of interstimulus interval
+	PulseDuration  float64           // how long does a single pulse last
 }
 
 // FusionModel describes the basic ingredients of the fusion model
@@ -132,47 +133,89 @@ func assembleReleaseMsgs(data *libmbd.MCellData, m *SimModel, seed int,
 		}
 
 		eventTime := float64(r.eventIter) * timeStep
-		// figure out if event happened within or between pulses
-		var pulseID int
-		if m.IsiValue == 0 {
-			pulseID = 0
-		} else {
-			pulseID = int(math.Floor(eventTime / m.IsiValue))
-		}
-		var pulseString string
-		if eventTime-float64(pulseID)*m.IsiValue > m.PulseDuration {
-			pulseString = fmt.Sprintf("ISI_%d", pulseID+1)
-		} else {
-			pulseString = fmt.Sprintf("%d", pulseID+1)
-		}
+		pulseString := gatherPulseID(m.IsiValue, m.PulseDuration, eventTime)
 
-		fmt.Fprintf(buffer, "seed : %d   vesicleID : %s   time : %e   pulseID : %s", seed,
-			r.vesicleID, eventTime, pulseString)
-		fmt.Fprintf(buffer, "  sensors: [")
+		fmt.Fprintf(buffer, "seed : %d   vesicleID : %s   time : %e   pulseID : %s",
+			seed, r.vesicleID, eventTime, pulseString)
 
+		fmt.Fprintf(buffer, "  sensors : |")
 		// sort sensors to make output consistent across runs
 		var sensors = sort.IntSlice(r.sensors)
 		sensors.Sort()
 		for _, s := range sensors {
-			fmt.Fprintf(buffer, "%d ", s)
-		}
-		fmt.Fprintf(buffer, "]")
-		fmt.Fprintf(buffer, "  channels: [")
-
-		// sort channels to make output consistent across runs
-		var cs sort.StringSlice
-		for n := range channels {
-			cs = append(cs, n)
-		}
-		cs.Sort()
-		for _, c := range cs {
-			fmt.Fprintf(buffer, "%s : %d  ", c, int(channels[c]))
+			fmt.Fprintf(buffer, "%d|", s)
 		}
 
-		fmt.Fprintf(buffer, "]")
+		chans, mainChan, totalCa := gatherVGCCData(m.VGCCVesicleMap,
+			channels, r.vesicleID)
+		fmt.Fprintf(buffer, "  channels : %s", chans)
+		fmt.Fprintf(buffer, "  totalCaBound : %d", totalCa)
+		fmt.Fprintf(buffer, "  mainChannelContrib : %s", mainChan)
+
 		messages = append(messages, buffer.String())
 	}
 	return messages
+}
+
+// gatherPulseID determines the pulse or interstimulus ID during which
+// a release happened and then returns it as a string
+func gatherPulseID(isi, duration, eventTime float64) string {
+	// figure out if event happened within or between pulses
+	var pulseID int
+	if isi == 0 {
+		pulseID = 0
+	} else {
+		pulseID = int(math.Floor(eventTime / isi))
+	}
+	var pulseString string
+	if eventTime-float64(pulseID)*isi > duration {
+		pulseString = fmt.Sprintf("ISI_%d", pulseID+1)
+	} else {
+		pulseString = fmt.Sprintf("%d", pulseID+1)
+	}
+	return pulseString
+}
+
+// gatherVGCCData gathers the IDs of the channels contributing to the release,
+// if the main channel was involved in release and the total number of bound
+// calcium ions
+func gatherVGCCData(vesMap map[string]string, channels map[string]float64,
+	vesicleID string) (string, string, int) {
+
+	var totalCa int
+	var mainChannel string
+	if vesMap != nil {
+		mainChannel = vesMap[vesicleID]
+	}
+	var haveMainChannel bool
+
+	// sort channels to make output consistent across runs
+	var cs sort.StringSlice
+	for n := range channels {
+		cs = append(cs, n)
+	}
+	cs.Sort()
+
+	buffer := bytes.NewBufferString("")
+	fmt.Fprintf(buffer, "|")
+	for _, c := range cs {
+		numCa := int(channels[c])
+		totalCa += numCa
+		if c == mainChannel {
+			haveMainChannel = true
+		}
+		fmt.Fprintf(buffer, "%s:%d|", c, int(channels[c]))
+	}
+
+	// assemble indicator if main channel was involved in release or not. NA
+	// indicates that we didn't have the VGCC-Vesicle mapping available
+	mainChannelMsg := "NA"
+	if haveMainChannel {
+		mainChannelMsg = "Y"
+	} else if mainChannel != "" {
+		mainChannelMsg = "N"
+	}
+	return buffer.String(), mainChannelMsg, totalCa
 }
 
 // extractActivationEvents returns a slice with actvation and deactivation events

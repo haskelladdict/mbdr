@@ -13,7 +13,7 @@ import (
 // analyser info
 var info = rel.AnalyzerInfo{
 	Name:    "frogAnalyzerY",
-	Version: "0.1",
+	Version: "0.2",
 }
 
 // simulation model
@@ -21,6 +21,13 @@ var model = rel.SimModel{
 	VesicleIDs: []string{"01", "02", "03", "04", "05", "06", "07", "08", "09",
 		"10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22",
 		"23", "24", "25", "26"},
+	VGCCVesicleMap: map[string]string{"01": "A01", "02": "A04", "03": "A09",
+		"04": "A13", "05": "A17", "06": "A21", "07": "A25", "08": "A29",
+		"09": "A33", "10": "A38", "11": "A42", "12": "A46", "13": "A49",
+		"14": "D01", "15": "D04", "16": "D09", "17": "D13", "18": "D17",
+		"19": "D21", "20": "D25", "21": "D29", "22": "D33", "23": "D37",
+		"24": "D42", "25": "D46", "26": "D49",
+	},
 	SensorTemplate: "bound_vesicle_%s_%s_%02d_%d.%04d.dat",
 	PulseDuration:  3e-3,
 }
