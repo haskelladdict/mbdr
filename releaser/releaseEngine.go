@@ -151,6 +151,7 @@ func assembleReleaseMsgs(data *libmbd.MCellData, m *SimModel, seed int,
 		fmt.Fprintf(buffer, "  channels : %s", chans)
 		fmt.Fprintf(buffer, "  totalCaBound : %d", totalCa)
 		fmt.Fprintf(buffer, "  mainChannelContrib : %s", mainChan)
+		fmt.Fprintf(buffer, "  numContribChannels : %d", len(channels))
 
 		messages = append(messages, buffer.String())
 	}
