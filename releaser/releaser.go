@@ -153,7 +153,6 @@ func runJob(analysisJobs <-chan string, done chan<- []string, m *SimModel,
 
 		done <- releaseMsgs
 	}
-	close(errMsgs)
 }
 
 // Run is the main entry point for the release analysis and spawns the
@@ -172,7 +171,7 @@ func Run(model *SimModel, fusion *FusionModel, info *AnalyzerInfo, args []string
 		log.Fatal("Analysis multi-pulse data requires a non-zero ISI value.")
 	}
 
-	// request proper number of go routines
+	// request proper number of go routines.
 	runtime.GOMAXPROCS(info.NumThreads)
 
 	printHeader(model, fusion, info)
@@ -199,6 +198,7 @@ func Run(model *SimModel, fusion *FusionModel, info *AnalyzerInfo, args []string
 			fmt.Println(m)
 		}
 	}
+	close(errMsgs)
 
 	// print errors
 	if len(errors) != 0 {
