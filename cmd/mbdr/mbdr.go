@@ -8,6 +8,7 @@ import (
 
 	"github.com/haskelladdict/mbdr/libmbd"
 	"github.com/haskelladdict/mbdr/parser"
+	"github.com/haskelladdict/mbdr/version"
 )
 
 const mbdrMajorVersion = 3
@@ -86,8 +87,8 @@ func usage() {
 // showInfo provides general info regarding the nature and amount of data
 // contained in the binary mcell file
 func showInfo(d *libmbd.MCellData) {
-	fmt.Printf("This is mbdr version %d.%d        (C) 2014 M. Dittrich\n",
-		mbdrMajorVersion, mbdrMinorVersion)
+	fmt.Printf("This is mbdr version %s        (C) %s M. Dittrich\n", version.Tag,
+		version.Year)
 	fmt.Println("------------------------------------------------------------------")
 	fmt.Printf("mbdr> output was generated using %s\n", d.API)
 	fmt.Printf("mbdr> found %d output data blocks with %d output iterations each\n",

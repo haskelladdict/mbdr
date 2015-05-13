@@ -8,12 +8,12 @@ import (
 	"fmt"
 
 	rel "github.com/haskelladdict/mbdr/releaser"
+	"github.com/haskelladdict/mbdr/version"
 )
 
 // analyser info
 var info = rel.AnalyzerInfo{
-	Name:    "frogAnalyzer",
-	Version: "0.2",
+	Name: "frogAnalyzer",
 }
 
 // simulation model
@@ -62,7 +62,7 @@ func init() {
 
 // usage prints a brief usage information to stdout
 func usage() {
-	fmt.Printf("%s v%s  (C) 2014 Markus Dittrich\n\n", info.Name, info.Version)
+	fmt.Printf("%s v%s  (C) %s Markus Dittrich\n\n", info.Name, version.Tag, version.Year)
 	fmt.Printf("usage: %s [options] <binary mcell files>\n", info.Name)
 	fmt.Println("\noptions:")
 	flag.PrintDefaults()
