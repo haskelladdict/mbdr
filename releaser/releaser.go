@@ -15,6 +15,7 @@ import (
 
 	"github.com/haskelladdict/mbdr/libmbd"
 	"github.com/haskelladdict/mbdr/parser"
+	"github.com/haskelladdict/mbdr/version"
 )
 
 // extractSeed attempts to extract the seed from the filename of the provided
@@ -42,7 +43,7 @@ func extractSeed(fileName string) (int, error) {
 // printHeader prints and informative header file with date and commandline
 // options requested for analysis
 func printHeader(model *SimModel, fusion *FusionModel, info *AnalyzerInfo) {
-	fmt.Printf("%s v%s ran on %s\n", info.Name, info.Version, time.Now())
+	fmt.Printf("%s v%s ran on %s\n", info.Name, version.Tag, time.Now())
 	if host, err := os.Hostname(); err == nil {
 		fmt.Println("on ", host)
 	}
