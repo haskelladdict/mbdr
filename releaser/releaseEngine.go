@@ -219,7 +219,7 @@ func gatherVGCCData(vesMap map[string]string, channels map[string]float64,
 	return buffer.String(), mainChannelMsg, totalCa
 }
 
-// extractActivationEvents returns a slice with actvation and deactivation events
+// extractActivationEvents returns a slice with activation and deactivation events
 // for the given vesicle and active zone
 func extractActivationEvents(data *libmbd.MCellData, m *SimModel, fusion *FusionModel,
 	seed int, vesicleID string) ([]ActEvent, error) {

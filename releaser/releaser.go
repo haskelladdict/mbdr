@@ -23,8 +23,8 @@ import (
 func extractSeed(fileName string) (int, error) {
 	items := strings.Split(fileName, ".")
 	if len(items) <= 3 {
-		return -1, fmt.Errorf("incorrectly formatted fileName. " +
-			"Expected *.<seedIDString>.bin.(gz|bz2)")
+		return -1, fmt.Errorf("incorrectly formatted fileName %s. "+
+			"Expected *.<seedIDString>.bin.(gz|bz2)", fileName)
 	}
 
 	for i := len(items) - 1; i >= 0; i-- {
@@ -120,28 +120,30 @@ func createAnalysisJobs(fileNames []string, analysisJobs chan<- string) {
 // runJob is responsible for analyzing the data files provided in the
 // analysisJob channel
 func runJob(analysisJobs <-chan string, done chan<- []string, m *SimModel,
-	f *FusionModel) {
+	f *FusionModel, errMsgs chan<- string) {
 
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	for fileName := range analysisJobs {
 		seed, err := extractSeed(fileName)
 		if err != nil {
-			fmt.Println(err)
+			errMsgs <- fmt.Sprintln(err)
 			done <- nil
-			return
+			continue
 		}
 
 		data, err := parser.Read(fileName)
 		if err != nil {
-			fmt.Println(err)
+			errMsgs <- fmt.Sprintln(err)
 			done <- nil
+			continue
 		}
 
 		releaseMsgs, err := analyze(data, m, f, rng, seed)
 		if err != nil {
 			fmt.Println(err)
 			done <- nil
+			continue
 		}
 		// NOTE: This is a bit of a hack but since we're dealing with potentially
 		// large data sets we need to make sure to free memory before we start
@@ -150,6 +152,7 @@ func runJob(analysisJobs <-chan string, done chan<- []string, m *SimModel,
 
 		done <- releaseMsgs
 	}
+	close(errMsgs)
 }
 
 // Run is the main entry point for the release analysis and spawns the
@@ -176,13 +179,33 @@ func Run(model *SimModel, fusion *FusionModel, info *AnalyzerInfo, args []string
 	go createAnalysisJobs(args, analysisJobs)
 
 	done := make(chan []string)
+	errMsgs := make(chan string)
 	for i := 0; i < info.NumThreads; i++ {
-		go runJob(analysisJobs, done, model, fusion)
+		go runJob(analysisJobs, done, model, fusion, errMsgs)
 	}
+
+	// collect all errors
+	var errors []string
+	go func() {
+		for m := range errMsgs {
+			errors = append(errors, m)
+		}
+	}()
+
 	for i := 0; i < len(args); i++ {
 		msgs := <-done
 		for _, m := range msgs {
 			fmt.Println(m)
+		}
+	}
+
+	// print errors
+	if len(errors) != 0 {
+		fmt.Println("\n\n------------------------------------------")
+		fmt.Printf("ERROR: %d output files could not be processed!\n", len(errors))
+		fmt.Println("\nReason:")
+		for _, e := range errors {
+			fmt.Print(e)
 		}
 	}
 }

@@ -66,7 +66,8 @@ func Read(filename string) (*libmbd.MCellData, error) {
 	// check API version and pick proper reader
 	apiTag, err := parseAPITag(file)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Failed to parse API tag of file %s  - file empty??",
+			filename)
 	}
 
 	data := new(libmbd.MCellData)
@@ -95,7 +96,7 @@ func Read(filename string) (*libmbd.MCellData, error) {
 // parseAPITag reads the API tag inside the data set
 func parseAPITag(r io.Reader) (string, error) {
 	receivedAPITag := make([]byte, apiTagLength)
-	if _, err := io.ReadFull(r, receivedAPITag); err != nil {
+	if n, err := io.ReadFull(r, receivedAPITag); err != nil || n == 0 {
 		return "", err
 	}
 	return string(receivedAPITag), nil
