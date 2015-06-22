@@ -6,6 +6,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
 
 	rel "github.com/haskelladdict/mbdr/releaser"
 	"github.com/haskelladdict/mbdr/version"
@@ -53,8 +54,8 @@ func init() {
 		"deterministic model")
 	flag.IntVar(&fusionModel.NumActiveSites, "n", 0, "number of sites required for activation "+
 		"of deterministic model")
-	flag.Float64Var(&model.IsiValue, "i", -1.0, "pulse duration in [s] for analysis multi "+
-		"pulse data")
+	flag.Float64Var(&model.IsiValue, "i", -1.0, "pulse interval in [s] for analysis multi "+
+		"pulse data (requires p > 1)")
 	flag.IntVar(&info.NumThreads, "T", 1, "number of threads. Each thread works on a "+
 		"single binary output file\n\tso memory requirements multiply")
 
@@ -98,6 +99,12 @@ func usage() {
 func main() {
 	flag.Parse()
 	if len(flag.Args()) == 0 {
+		usage()
+		return
+	}
+
+	if model.IsiValue != 0.0 && model.NumPulses <= 1 {
+		fmt.Fprintf(os.Stderr, "ERROR: Specification of an pulse interval requires p > 1\n\n")
 		usage()
 		return
 	}
