@@ -37,7 +37,7 @@ var fusionModel = rel.FusionModel{
 // initialize simulation and fusion model parameters coming from commandline
 func init() {
 
-	flag.IntVar(&model.NumPulses, "p", 1, "number of AP pulses in the model")
+	flag.IntVar(&model.NumPulses, "p", 2, "number of AP pulses in the model")
 	flag.IntVar(&fusionModel.SytEnergy, "s", -1, "energy of active synaptotagmin sites "+
 		"(required with -e flag)")
 	flag.IntVar(&fusionModel.YEnergy, "y", -1, "energy of active y sites "+
@@ -95,8 +95,8 @@ func main() {
 		return
 	}
 
-	if model.IsiValue != 0.0 && model.NumPulses <= 1 {
-		fmt.Fprintf(os.Stderr, "ERROR: Specification of an pulse interval requires p > 1\n\n")
+	if model.NumPulses <= 1 {
+		fmt.Fprintf(os.Stderr, "ERROR: This analyzer requires p > 1\n\n")
 		usage()
 		return
 	}

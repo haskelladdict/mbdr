@@ -250,6 +250,7 @@ func extractActivationEvents(data *libmbd.MCellData, m *SimModel, fusion *Fusion
 				}
 			}
 		}
+		fmt.Println(dataNames)
 
 		sensorData := make([]int, data.BlockLen())
 		for _, dataName := range dataNames {
