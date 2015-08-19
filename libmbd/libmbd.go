@@ -267,6 +267,12 @@ func (d *MCellData) blockDataAPI2(id uint64) (*CountData, error) {
 
 			stream++
 		}
+
+		// safety check to catch truncated and thus corrupt output files
+		if loc >= uint64(len(d.Buffer)) {
+			return nil, fmt.Errorf("truncated data detected - output file may be corrupt")
+		}
+
 		// read current row
 		for i := uint64(0); i < entry.NumCols; i++ {
 			buf := (d.Buffer)[loc:]

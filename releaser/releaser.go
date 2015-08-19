@@ -142,7 +142,7 @@ func runJob(analysisJobs <-chan string, done chan<- []string, m *SimModel,
 
 		releaseMsgs, err := analyze(data, m, f, rng, seed)
 		if err != nil {
-			fmt.Println(err)
+			fmt.Fprintf(os.Stderr, "Failed to analyze output file %s: %s\n", fileName, err)
 			done <- nil
 			continue
 		}
