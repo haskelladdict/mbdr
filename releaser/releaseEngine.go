@@ -61,7 +61,7 @@ type CaSensor struct {
 type ActEvent struct {
 	sensorID  int    // sensor which was activated/deactivated
 	vesicleID string // vesicleID were activation event took place
-	eventIter int    // iteration when event occured
+	eventIter int    // iteration when event occurred
 	activated bool   // activated is set to true and deactivated otherwise
 }
 
@@ -202,7 +202,7 @@ func gatherVGCCData(vesMap map[string]string, channels map[string]float64,
 	for _, c := range cs {
 		numCa := int(channels[c])
 		totalCa += numCa
-		if c == mainChannel {
+		if c[0:3] == mainChannel { // ignore pulse tags in channel names
 			haveMainChannel = true
 		}
 		fmt.Fprintf(buffer, "%s:%d|", c, int(channels[c]))
