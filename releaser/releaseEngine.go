@@ -27,7 +27,6 @@ type AnalyzerInfo struct {
 }
 
 // SimModel encapsulates all information related to the simulation/model itself
-// fusion events
 type SimModel struct {
 	CaSensors      []CaSensor        // list of Ca sensor sites per synaptotagmin/Y site
 	VesicleIDs     []string          // list of vesicle IDs
@@ -62,7 +61,7 @@ type ActEvent struct {
 	sensorID  int    // sensor which was activated/deactivated
 	vesicleID string // vesicleID were activation event took place
 	eventIter int    // iteration when event occurred
-	activated bool   // activated is set to true and deactivated otherwise
+	activated bool   // if true sensor is activated and deactivated otherwise
 }
 
 // sort infrastructure for sorting ActEvents according to the event time
