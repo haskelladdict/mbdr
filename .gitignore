@@ -6,6 +6,8 @@
 # sublime3 project files
 *sublime*
 
+.tags*
+testData
 tags
 mbdr
 mouseAnalyzer
