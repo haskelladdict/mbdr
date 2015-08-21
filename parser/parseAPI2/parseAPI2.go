@@ -146,11 +146,6 @@ func parseBlockNames(r io.Reader, data *libmbd.MCellData) error {
 // within (number of datablocks, block names, ...).
 func parseHeader(r io.Reader, data *libmbd.MCellData) error {
 
-	/*
-		if err := checkAPITag(r); err != nil {
-			return err
-		}
-	*/
 	// skip first byte - this is a defect in the mcell binary output format
 	dummy := make([]byte, 1)
 	if _, err := io.ReadFull(r, dummy); err != nil {
