@@ -50,14 +50,14 @@ func init() {
 
 	// define synaptogamin and Y sites
 	model.CaSensors = make([]rel.CaSensor, fusionModel.NumSyt+fusionModel.NumY)
-	model.CaSensors[0] = rel.CaSensor{[]int{8, 9, 29, 30, 31}, rel.SytSite}
-	model.CaSensors[1] = rel.CaSensor{[]int{7, 32, 33, 34, 35}, rel.SytSite}
-	model.CaSensors[2] = rel.CaSensor{[]int{3, 6, 36, 37, 38}, rel.SytSite}
-	model.CaSensors[3] = rel.CaSensor{[]int{17, 39, 40, 41, 42}, rel.SytSite}
-	model.CaSensors[4] = rel.CaSensor{[]int{15, 16, 43, 44, 45}, rel.SytSite}
-	model.CaSensors[5] = rel.CaSensor{[]int{14, 46, 47, 48, 49}, rel.SytSite}
-	model.CaSensors[6] = rel.CaSensor{[]int{4, 12, 24, 50, 51}, rel.SytSite}
-	model.CaSensors[7] = rel.CaSensor{[]int{10, 25, 26, 27, 28}, rel.SytSite}
+	model.CaSensors[0] = rel.CaSensor{Sites: []int{8, 9, 29, 30, 31}, SiteType: rel.SytSite}
+	model.CaSensors[1] = rel.CaSensor{Sites: []int{7, 32, 33, 34, 35}, SiteType: rel.SytSite}
+	model.CaSensors[2] = rel.CaSensor{Sites: []int{3, 6, 36, 37, 38}, SiteType: rel.SytSite}
+	model.CaSensors[3] = rel.CaSensor{Sites: []int{17, 39, 40, 41, 42}, SiteType: rel.SytSite}
+	model.CaSensors[4] = rel.CaSensor{Sites: []int{15, 16, 43, 44, 45}, SiteType: rel.SytSite}
+	model.CaSensors[5] = rel.CaSensor{Sites: []int{14, 46, 47, 48, 49}, SiteType: rel.SytSite}
+	model.CaSensors[6] = rel.CaSensor{Sites: []int{4, 12, 24, 50, 51}, SiteType: rel.SytSite}
+	model.CaSensors[7] = rel.CaSensor{Sites: []int{10, 25, 26, 27, 28}, SiteType: rel.SytSite}
 }
 
 // usage prints a brief usage information to stdout

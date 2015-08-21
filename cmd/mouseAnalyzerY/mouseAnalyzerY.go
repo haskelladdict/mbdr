@@ -53,30 +53,30 @@ func init() {
 
 	// define synaptogamin and Y sites
 	model.CaSensors = make([]rel.CaSensor, fusionModel.NumSyt+fusionModel.NumY)
-	model.CaSensors[0] = rel.CaSensor{[]int{8, 9, 29, 30, 31}, rel.SytSite}
-	model.CaSensors[1] = rel.CaSensor{[]int{7, 32, 33, 34, 35}, rel.SytSite}
-	model.CaSensors[2] = rel.CaSensor{[]int{3, 6, 36, 37, 38}, rel.SytSite}
-	model.CaSensors[3] = rel.CaSensor{[]int{17, 39, 40, 41, 42}, rel.SytSite}
-	model.CaSensors[4] = rel.CaSensor{[]int{15, 16, 43, 44, 45}, rel.SytSite}
-	model.CaSensors[5] = rel.CaSensor{[]int{14, 46, 47, 48, 49}, rel.SytSite}
-	model.CaSensors[6] = rel.CaSensor{[]int{4, 12, 24, 50, 51}, rel.SytSite}
-	model.CaSensors[7] = rel.CaSensor{[]int{10, 25, 26, 27, 28}, rel.SytSite}
-	model.CaSensors[8] = rel.CaSensor{[]int{122}, rel.YSite}
-	model.CaSensors[9] = rel.CaSensor{[]int{70}, rel.YSite}
-	model.CaSensors[10] = rel.CaSensor{[]int{126}, rel.YSite}
-	model.CaSensors[11] = rel.CaSensor{[]int{142}, rel.YSite}
-	model.CaSensors[12] = rel.CaSensor{[]int{62}, rel.YSite}
-	model.CaSensors[13] = rel.CaSensor{[]int{118}, rel.YSite}
-	model.CaSensors[14] = rel.CaSensor{[]int{22}, rel.YSite}
-	model.CaSensors[15] = rel.CaSensor{[]int{134}, rel.YSite}
-	model.CaSensors[16] = rel.CaSensor{[]int{110}, rel.YSite}
-	model.CaSensors[17] = rel.CaSensor{[]int{66}, rel.YSite}
-	model.CaSensors[18] = rel.CaSensor{[]int{106}, rel.YSite}
-	model.CaSensors[19] = rel.CaSensor{[]int{130}, rel.YSite}
-	model.CaSensors[20] = rel.CaSensor{[]int{2}, rel.YSite}
-	model.CaSensors[21] = rel.CaSensor{[]int{114}, rel.YSite}
-	model.CaSensors[22] = rel.CaSensor{[]int{42}, rel.YSite}
-	model.CaSensors[23] = rel.CaSensor{[]int{138}, rel.YSite}
+	model.CaSensors[0] = rel.CaSensor{Sites: []int{8, 9, 29, 30, 31}, SiteType: rel.SytSite}
+	model.CaSensors[1] = rel.CaSensor{Sites: []int{7, 32, 33, 34, 35}, SiteType: rel.SytSite}
+	model.CaSensors[2] = rel.CaSensor{Sites: []int{3, 6, 36, 37, 38}, SiteType: rel.SytSite}
+	model.CaSensors[3] = rel.CaSensor{Sites: []int{17, 39, 40, 41, 42}, SiteType: rel.SytSite}
+	model.CaSensors[4] = rel.CaSensor{Sites: []int{15, 16, 43, 44, 45}, SiteType: rel.SytSite}
+	model.CaSensors[5] = rel.CaSensor{Sites: []int{14, 46, 47, 48, 49}, SiteType: rel.SytSite}
+	model.CaSensors[6] = rel.CaSensor{Sites: []int{4, 12, 24, 50, 51}, SiteType: rel.SytSite}
+	model.CaSensors[7] = rel.CaSensor{Sites: []int{10, 25, 26, 27, 28}, SiteType: rel.SytSite}
+	model.CaSensors[8] = rel.CaSensor{Sites: []int{122}, SiteType: rel.YSite}
+	model.CaSensors[9] = rel.CaSensor{Sites: []int{70}, SiteType: rel.YSite}
+	model.CaSensors[10] = rel.CaSensor{Sites: []int{126}, SiteType: rel.YSite}
+	model.CaSensors[11] = rel.CaSensor{Sites: []int{142}, SiteType: rel.YSite}
+	model.CaSensors[12] = rel.CaSensor{Sites: []int{62}, SiteType: rel.YSite}
+	model.CaSensors[13] = rel.CaSensor{Sites: []int{118}, SiteType: rel.YSite}
+	model.CaSensors[14] = rel.CaSensor{Sites: []int{22}, SiteType: rel.YSite}
+	model.CaSensors[15] = rel.CaSensor{Sites: []int{134}, SiteType: rel.YSite}
+	model.CaSensors[16] = rel.CaSensor{Sites: []int{110}, SiteType: rel.YSite}
+	model.CaSensors[17] = rel.CaSensor{Sites: []int{66}, SiteType: rel.YSite}
+	model.CaSensors[18] = rel.CaSensor{Sites: []int{106}, SiteType: rel.YSite}
+	model.CaSensors[19] = rel.CaSensor{Sites: []int{130}, SiteType: rel.YSite}
+	model.CaSensors[20] = rel.CaSensor{Sites: []int{2}, SiteType: rel.YSite}
+	model.CaSensors[21] = rel.CaSensor{Sites: []int{114}, SiteType: rel.YSite}
+	model.CaSensors[22] = rel.CaSensor{Sites: []int{42}, SiteType: rel.YSite}
+	model.CaSensors[23] = rel.CaSensor{Sites: []int{138}, SiteType: rel.YSite}
 }
 
 // usage prints a brief usage information to stdout
