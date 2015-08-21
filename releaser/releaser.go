@@ -11,12 +11,96 @@ import (
 	"runtime/debug"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/haskelladdict/mbdr/libmbd"
 	"github.com/haskelladdict/mbdr/parser"
 	"github.com/haskelladdict/mbdr/version"
 )
+
+// Output encapsulates the analysis results or any errors which occurred during
+// the analysis of a single binary output file
+type Output struct {
+	Error   error    // non-nil only if error occurred during analysis
+	Results []string // list of analysis results
+}
+
+// Run is the main entry point for the release analysis and spawns the
+// requested number of analysis goroutines
+func Run(model *SimModel, fusion *FusionModel, info *AnalyzerInfo, args []string) {
+
+	if err := checkInput(model, fusion); err != nil {
+		log.Fatal(err)
+	}
+
+	runtime.GOMAXPROCS(info.NumThreads)
+
+	printHeader(model, fusion, info)
+	analysisJobs := make(chan string)
+	go createAnalysisJobs(args, analysisJobs)
+
+	output := make(chan Output)
+	var runWg sync.WaitGroup
+	for i := 0; i < info.NumThreads; i++ {
+		runWg.Add(1)
+		go runJob(analysisJobs, model, fusion, output, &runWg)
+	}
+
+	// close done channel once all jobs are finished
+	go func() {
+		runWg.Wait()
+		close(output)
+	}()
+
+	var errs []error
+	for out := range output {
+		if out.Error != nil {
+			errs = append(errs, out.Error)
+			continue
+		}
+
+		for _, msg := range out.Results {
+			fmt.Println(msg)
+		}
+	}
+	printErrors(errs)
+}
+
+// runJob is responsible for analyzing the data files provided in the
+// analysisJob channel
+func runJob(analysisJobs <-chan string, m *SimModel, f *FusionModel,
+	output chan<- Output, wg *sync.WaitGroup) {
+
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	for fileName := range analysisJobs {
+		seed, err := extractSeed(fileName)
+		if err != nil {
+			output <- Output{fmt.Errorf("%s: %s", fileName, err), nil}
+			continue
+		}
+
+		data, err := parser.Read(fileName)
+		if err != nil {
+			output <- Output{fmt.Errorf("%s: %s", fileName, err), nil}
+			continue
+		}
+
+		releaseMsgs, err := analyze(data, m, f, rng, seed)
+		if err != nil {
+			output <- Output{fmt.Errorf("%s: %s", fileName, err), nil}
+			continue
+		}
+		// NOTE: This is a bit of a hack but since we're dealing with potentially
+		// large data sets we need to make sure to free memory before we start
+		// working on the next one
+		debug.FreeOSMemory()
+
+		output <- Output{nil, releaseMsgs}
+	}
+	wg.Done()
+}
 
 // extractSeed attempts to extract the seed from the filename of the provided
 // binary mcell data file.
@@ -62,6 +146,36 @@ func printHeader(model *SimModel, fusion *FusionModel, info *AnalyzerInfo) {
 	}
 	fmt.Println("-------------- data --------------------")
 	fmt.Println("")
+}
+
+// printErrors prints out all encountered errors (if any) to stdout
+func printErrors(errors []error) {
+	if len(errors) != 0 {
+		fmt.Println("\n\n------------------------------------------")
+		fmt.Printf("ERROR: %d output files could not be processed!\n", len(errors))
+		fmt.Println("\nReason:")
+		for _, e := range errors {
+			fmt.Println(e)
+		}
+	}
+}
+
+// checkInput does basic sanity checks on the provided input parameters
+func checkInput(model *SimModel, fusion *FusionModel) error {
+
+	if fusion.EnergyModel && (fusion.SytEnergy < 0 || fusion.YEnergy < 0) {
+		return fmt.Errorf("Please provide a non-negative synaptotagmin and y site energy\n")
+	}
+
+	if !fusion.EnergyModel && fusion.NumActiveSites == 0 {
+		return fmt.Errorf("Please provide a positive count for the number of required active sites\n")
+	}
+
+	if model.NumPulses > 1 && model.IsiValue <= 0 {
+		return fmt.Errorf("Analysis multi-pulse data requires a non-zero ISI value\n")
+	}
+
+	return nil
 }
 
 // determineCaContrib determines which Ca channels contributed to the release
@@ -116,97 +230,4 @@ func createAnalysisJobs(fileNames []string, analysisJobs chan<- string) {
 		analysisJobs <- n
 	}
 	close(analysisJobs)
-}
-
-// runJob is responsible for analyzing the data files provided in the
-// analysisJob channel
-func runJob(analysisJobs <-chan string, done chan<- []string, m *SimModel,
-	f *FusionModel, errMsgs chan<- string) {
-
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-
-	for fileName := range analysisJobs {
-		seed, err := extractSeed(fileName)
-		if err != nil {
-			errMsgs <- fmt.Sprintln(err)
-			done <- nil
-			continue
-		}
-
-		data, err := parser.Read(fileName)
-		if err != nil {
-			errMsgs <- fmt.Sprintln(err)
-			done <- nil
-			continue
-		}
-
-		releaseMsgs, err := analyze(data, m, f, rng, seed)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to analyze output file %s: %s\n", fileName, err)
-			done <- nil
-			continue
-		}
-		// NOTE: This is a bit of a hack but since we're dealing with potentially
-		// large data sets we need to make sure to free memory before we start
-		// working on the next one
-		debug.FreeOSMemory()
-
-		done <- releaseMsgs
-	}
-}
-
-// Run is the main entry point for the release analysis and spawns the
-// requested number of analysis goroutines
-func Run(model *SimModel, fusion *FusionModel, info *AnalyzerInfo, args []string) {
-	// some sanity checks
-	if fusion.EnergyModel && (fusion.SytEnergy < 0 || fusion.YEnergy < 0) {
-		log.Fatal("Please provide a non-negative synaptotagmin and y site energy")
-	}
-
-	if !fusion.EnergyModel && fusion.NumActiveSites == 0 {
-		log.Fatal("Please provide a positive count for the number of required active sites")
-	}
-
-	if model.NumPulses > 1 && model.IsiValue <= 0 {
-		log.Fatal("Analysis multi-pulse data requires a non-zero ISI value.")
-	}
-
-	// request proper number of go routines.
-	runtime.GOMAXPROCS(info.NumThreads)
-
-	printHeader(model, fusion, info)
-	analysisJobs := make(chan string)
-	go createAnalysisJobs(args, analysisJobs)
-
-	done := make(chan []string)
-	errMsgs := make(chan string)
-	for i := 0; i < info.NumThreads; i++ {
-		go runJob(analysisJobs, done, model, fusion, errMsgs)
-	}
-
-	// collect all errors
-	var errors []string
-	go func() {
-		for m := range errMsgs {
-			errors = append(errors, m)
-		}
-	}()
-
-	for i := 0; i < len(args); i++ {
-		msgs := <-done
-		for _, m := range msgs {
-			fmt.Println(m)
-		}
-	}
-	close(errMsgs)
-
-	// print errors
-	if len(errors) != 0 {
-		fmt.Println("\n\n------------------------------------------")
-		fmt.Printf("ERROR: %d output files could not be processed!\n", len(errors))
-		fmt.Println("\nReason:")
-		for _, e := range errors {
-			fmt.Print(e)
-		}
-	}
 }
